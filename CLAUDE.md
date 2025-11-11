@@ -164,3 +164,25 @@ When working on tasks tracked in **PLAN.md** with checkboxes:
 
 ### Implementation Note
 This workflow applies to any checklist-based planning document, not just PLAN.md. Always check with the user before updating progress indicators.
+
+## Git Commit Workflow
+
+### Creating Commits
+- **IMPORTANT**: Do NOT create git commits until explicitly instructed by the user
+- The user may want to batch multiple changes together before committing
+- After making changes, inform the user what files were modified and wait for commit instruction
+- Example: "I've updated `.gitignore` with Python, macOS, and PyCharm ignore patterns. Let me know when you'd like me to commit these changes."
+
+### Why This Matters
+- Allows the user to review changes before they're committed
+- Enables batching related changes into a single logical commit
+- Gives the user control over commit timing and granularity
+- Prevents premature commits when additional changes are planned
+
+### When to Commit
+- Only commit when the user explicitly says "commit" or gives similar instruction
+- User may say things like:
+  - "commit these changes"
+  - "create a commit"
+  - "commit the changes to X and Y"
+  - "go ahead and commit"
