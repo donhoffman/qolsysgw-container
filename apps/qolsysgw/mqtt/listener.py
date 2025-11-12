@@ -1,75 +1,133 @@
+"""MQTT listeners for Qolsys events and control messages."""
+
 import json
 import logging
+from typing import Callable, Optional
 
-from appdaemon.plugins.mqtt.mqttapi import Mqtt
-
-from qolsys.control import QolsysControl
-from qolsys.events import QolsysEvent
-from qolsys.exceptions import UnknownQolsysControlException
-from qolsys.exceptions import UnknownQolsysEventException
-from qolsys.utils import defaultLoggerCallback
+from apps.qolsysgw.mqtt.client import MqttClient
+from apps.qolsysgw.qolsys.control import QolsysControl
+from apps.qolsysgw.qolsys.events import QolsysEvent
+from apps.qolsysgw.qolsys.exceptions import UnknownQolsysControlException
+from apps.qolsysgw.qolsys.exceptions import UnknownQolsysEventException
 
 
 LOGGER = logging.getLogger(__name__)
 
 
-class MqttListener(object):
-    def __init__(self, app: Mqtt, namespace: str, topic: str,
-                 callback: callable = None, logger=None):
-        self._callback = callback or defaultLoggerCallback
+class MqttListener:
+    """Base MQTT listener class."""
+
+    def __init__(
+        self,
+        mqtt_client: MqttClient,
+        topic: str,
+        callback: Optional[Callable] = None,
+        logger: Optional[logging.Logger] = None,
+    ):
+        """Initialize MQTT listener.
+
+        Args:
+            mqtt_client: MQTT client instance
+            topic: MQTT topic to subscribe to
+            callback: Callback function for parsed messages
+            logger: Logger instance (optional)
+        """
+        self._mqtt_client = mqtt_client
+        self._topic = topic
+        self._callback = callback
         self._logger = logger or LOGGER
 
-        app.mqtt_subscribe(topic, namespace=namespace)
-        app.listen_event(self.event_callback, event='MQTT_MESSAGE',
-                         topic=topic, namespace=namespace)
+    async def start(self) -> None:
+        """Start listening to MQTT topic."""
+        await self._mqtt_client.subscribe(self._topic, self._message_callback)
+        self._logger.info(f"Started listening to {self._topic}")
+
+    async def _message_callback(self, topic: str, payload: str) -> None:
+        """Internal callback that receives raw MQTT messages.
+
+        Subclasses should override event_callback() instead.
+
+        Args:
+            topic: MQTT topic
+            payload: Message payload
+        """
+        await self.event_callback(topic, payload)
+
+    async def event_callback(self, topic: str, payload: str) -> None:
+        """Process MQTT message. Override in subclasses.
+
+        Args:
+            topic: MQTT topic
+            payload: Message payload
+        """
+        raise NotImplementedError("Subclasses must implement event_callback()")
 
 
 class MqttQolsysEventListener(MqttListener):
-    async def event_callback(self, event_name, data, kwargs):
-        self._logger.debug(f'Received {event_name} with data={data} and kwargs={kwargs}')
+    """Listener for Qolsys panel events published to MQTT."""
 
-        event_str = data.get('payload')
-        if not event_str:
-            self._logger.warning('Received empty event: {data}')
+    async def event_callback(self, topic: str, payload: str) -> None:
+        """Parse and process Qolsys event from MQTT.
+
+        Args:
+            topic: MQTT topic
+            payload: JSON event payload
+        """
+        self._logger.debug(f'Received event on {topic}: {payload}')
+
+        if not payload:
+            self._logger.warning(f'Received empty event on {topic}')
             return
 
         try:
-            # We try to parse the event to one of our event classes
-            event = QolsysEvent.from_json(event_str)
+            # Parse the event to one of our event classes
+            event = QolsysEvent.from_json(payload)
         except json.decoder.JSONDecodeError:
-            self._logger.debug(f'Data is not JSON: {data}')
+            self._logger.debug(f'Payload is not JSON: {payload}')
             return
         except UnknownQolsysEventException:
-            self._logger.debug(f'Unknown Qolsys event: {data}')
+            self._logger.debug(f'Unknown Qolsys event: {payload}')
             return
 
-        try:
-            await self._callback(event)
-        except:  # noqa: E722
-            self._logger.exception(f'Error calling callback for event: {event}')
+        # Call the user callback if provided
+        if self._callback:
+            # noinspection PyBroadException
+            try:
+                await self._callback(event)
+            except Exception:
+                self._logger.exception(f'Error calling callback for event: {event}')
 
 
 class MqttQolsysControlListener(MqttListener):
-    async def event_callback(self, event_name, data, kwargs):
-        self._logger.debug(f'Received {event_name} with data={data} '
-                           f'and kwargs={kwargs}')
+    """Listener for control commands from Home Assistant via MQTT."""
 
-        control_str = data.get('payload')
-        if not control_str:
-            self._logger.warning('Received empty control: {data}')
+    async def event_callback(self, topic: str, payload: str) -> None:
+        """Parse and process control command from MQTT.
+
+        Args:
+            topic: MQTT topic
+            payload: JSON control payload
+        """
+        self._logger.debug(f'Received control on {topic}: {payload}')
+
+        if not payload:
+            self._logger.warning(f'Received empty control on {topic}')
             return
 
         try:
-            # We try to parse the event to one of our event classes
-            control = QolsysControl.from_json(control_str)
+            # Parse the control command
+            control = QolsysControl.from_json(payload)
         except json.decoder.JSONDecodeError:
-            self._logger.debug(f'Data is not JSON: {data}')
+            self._logger.debug(f'Payload is not JSON: {payload}')
             return
         except UnknownQolsysControlException:
-            self._logger.debug(f'Unknown Qolsys control: {data}')
+            self._logger.debug(f'Unknown Qolsys control: {payload}')
             return
 
-        try:
-            await self._callback(control)
-        except:  # noqa: E722
-            self._logger.exception(f'Error calling callback for control: {control}')
+        # Call the user callback if provided
+        if self._callback:
+            # noinspection PyBroadException
+            try:
+                await self._callback(control)
+            except Exception:
+                self._logger.exception(f'Error calling callback for control: {control}')

@@ -2,6 +2,21 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
+## General Instructions
+
+These instructions apply to all tasks you perform in this repository. and should be followed carefully.
+- Remain critical and skeptical about my thinking at all times. Maintain consistent intellectual standards throughout our conversation. Don’t lower your bar for evidence or reasoning quality just because we’ve been talking longer or because I seem frustrated.
+- For Python projects, always follow PEP 8 style guidelines unless explicitly instructed otherwise.
+- For Python projects, always use type hints for all functions and methods unless explicitly instructed otherwise.
+- For Python projects, always use Google-style docstrings for all functions and methods unless explicitly instructed otherwise.
+- For Python projects, prefer 3.13 wherever possible, but ensure compatibility with the specified minimum Python version in PROJECT_SPEC.md. Lower versions are allowed if dependencies require it.
+- For Python projects, always use `black` for code formatting unless explicitly instructed otherwise.
+- For Python projects, prefer absolute imports over relative imports unless explicitly instructed otherwise.
+- Assume all development is done in a virtual environment unless explicitly instructed otherwise.
+- Assume all development is done on macOS 26 using PyCharm (>2025.2.4) unless explicitly instructed otherwise.
+- Use PyCharm MCP (Model Context Protocol) features to assist with code generation, refactoring, and navigation.
+- 
+
 ## Project Overview
 
 Qolsys Gateway (`qolsysgw`) is an AppDaemon automation that acts as a bridge between Qolsys IQ Panel alarm systems (2/2+/4) and Home Assistant via MQTT. It connects to the panel using the Control4 protocol and publishes sensor/partition states to Home Assistant using MQTT discovery.
@@ -172,17 +187,4 @@ This workflow applies to any checklist-based planning document, not just PLAN.md
 - The user may want to batch multiple changes together before committing
 - After making changes, inform the user what files were modified and wait for commit instruction
 - Example: "I've updated `.gitignore` with Python, macOS, and PyCharm ignore patterns. Let me know when you'd like me to commit these changes."
-
-### Why This Matters
-- Allows the user to review changes before they're committed
-- Enables batching related changes into a single logical commit
-- Gives the user control over commit timing and granularity
-- Prevents premature commits when additional changes are planned
-
-### When to Commit
-- Only commit when the user explicitly says "commit" or gives similar instruction
-- User may say things like:
-  - "commit these changes"
-  - "create a commit"
-  - "commit the changes to X and Y"
-  - "go ahead and commit"
+- When the user instructs you to commit, create a descriptive commit message summarizing the changes made

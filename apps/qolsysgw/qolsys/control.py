@@ -1,14 +1,14 @@
 import json
 import logging
 
-from qolsys.actions import QolsysActionArmAway
-from qolsys.actions import QolsysActionArmStay
-from qolsys.actions import QolsysActionDisarm
-from qolsys.actions import QolsysActionTrigger
-from qolsys.exceptions import UnknownQolsysControlException
-from qolsys.exceptions import MissingUserCodeException
-from qolsys.exceptions import InvalidUserCodeException
-from qolsys.utils import find_subclass
+from apps.qolsysgw.qolsys.actions import QolsysActionArmAway
+from apps.qolsysgw.qolsys.actions import QolsysActionArmStay
+from apps.qolsysgw.qolsys.actions import QolsysActionDisarm
+from apps.qolsysgw.qolsys.actions import QolsysActionTrigger
+from apps.qolsysgw.qolsys.exceptions import UnknownQolsysControlException
+from apps.qolsysgw.qolsys.exceptions import MissingUserCodeException
+from apps.qolsysgw.qolsys.exceptions import InvalidUserCodeException
+from apps.qolsysgw.qolsys.utils import find_subclass
 
 
 LOGGER = logging.getLogger(__name__)
@@ -83,6 +83,7 @@ class QolsysControl(object):
                 f"action '{action_type}'")
 
         from_json = getattr(klass, 'from_json', None)
+        # noinspection PyUnresolvedReferences
         if callable(from_json) and \
                 from_json.__func__ != QolsysControl.from_json.__func__:
             return from_json(data)
@@ -105,11 +106,18 @@ class QolsysControl(object):
 
 
 class _QolsysControlCheckCode(QolsysControl):
+    # Subclasses must define these
+    _CODE_REQUIRED_ATTR: str = None  # Config attribute name for code requirement
+    _PANEL_CODE_REQUIRED: bool = None  # Whether panel code is required (or 'secure_arm')
+
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
 
         self._requires_config = True
         self._panel_code = None
+        self._secure_arm = False
+        self._check_code = False
+        self._valid_code = None
 
     def configure(self, cfg, state):
         self._secure_arm = hasattr(self, '_partition_id') and \
@@ -129,7 +137,7 @@ class _QolsysControlCheckCode(QolsysControl):
         super().check()
 
         if self._check_code:
-            # The only condition where _valid_code is None and we still
+            # The only condition where _valid_code is None, and we still
             # require to get a code from home assistant is if we are in
             # the disarm process; in which case, we don't want to raise
             # an exception, as we want to try and use that provided code
@@ -171,6 +179,9 @@ class QolsysControlArm(_QolsysControlCheckCode):
         'bypass',
         'delay',
     ]
+    # Subclasses must define these
+    _ATTR_PREFIX: str = None  # Prefix for config attributes (e.g., 'arm_away', 'arm_stay')
+    _ACTION_CLASS = None  # Action class to instantiate (e.g., QolsysActionArmAway)
 
     def __init__(self, delay: int = None, bypass: bool = None, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -239,7 +250,7 @@ class QolsysControlArmCustomBypass(QolsysControlArm):
 
 
 # This depends on https://github.com/home-assistant/core/pull/60525, which
-# has been merged and is available starting with Home Assitant 2021.12
+# has been merged and is available starting with Home Assistant 2021.12
 class QolsysControlTrigger(_QolsysControlCheckCode):
 
     _CODE_REQUIRED_ATTR = 'code_trigger_required'

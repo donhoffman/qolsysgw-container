@@ -1,10 +1,10 @@
 import logging
 
-from mqtt.exceptions import MqttException
-
-from qolsys.events import QolsysEventInfoSummary
-from qolsys.exceptions import QolsysException
-from qolsys.observable import QolsysObservable
+from apps.qolsysgw.mqtt.exceptions import MqttException
+from apps.qolsysgw.qolsys.events import QolsysEventInfoSummary
+from apps.qolsysgw.qolsys.exceptions import QolsysException
+from apps.qolsysgw.qolsys.exceptions import QolsysSyncException
+from apps.qolsysgw.qolsys.observable import QolsysObservable
 
 
 LOGGER = logging.getLogger(__name__)
@@ -62,19 +62,23 @@ class QolsysState(QolsysObservable):
             zone = partition.zone(zone_id)
             if zone is not None:
                 return zone
+        return None
 
     def sensor(self, sensor_id):
         for partition in self.partitions:
             sensor = partition.sensor(sensor_id)
             if sensor is not None:
                 return sensor
+        return None
 
     def zone_update(self, sensor):
         # Find where the zone is currently at
         current_zone = self.zone(sensor.zone_id)
         if current_zone is None:
-            raise Exception(f'Zone not found for zone update: {sensor}, '
-                            'we might not be sync-ed anymore')  # TODO: make it a better exception
+            raise QolsysSyncException(
+                f'Zone not found for zone update: {sensor}, '
+                'gateway state may be out of sync with panel'
+            )
 
         if current_zone.partition_id == sensor.partition_id:
             self._partitions[sensor.partition_id].update_sensor(sensor)
@@ -85,8 +89,10 @@ class QolsysState(QolsysObservable):
     def zone_add(self, sensor):
         partition = self._partitions.get(sensor.partition_id)
         if partition is None:
-            raise Exception(f'Partition not found for zone add: {sensor},'
-                            'we might not be sync-ed anymore')  # TODO: make it a better exception
+            raise QolsysSyncException(
+                f'Partition not found for zone add: {sensor}, '
+                'gateway state may be out of sync with panel'
+            )
 
         self._partitions[sensor.partition_id].add_sensor(sensor)
 

@@ -16,9 +16,9 @@ class LoggerCallback(object):
                      f"{f'kwargs={kwargs}' if kwargs else ''}")
 
 
-async def defaultLoggerCallback(*args, **kwargs):
+async def default_logger_callback(*args, **kwargs):
     callback = LoggerCallback()
-    callback(*args, **kwargs)
+    await callback(*args, **kwargs)
 
 
 def all_subclasses(cls):
@@ -35,7 +35,7 @@ def find_subclass(cls, subtype: str, cache: dict = None, normalize=True,
     if normalize:
         normalized_subtype = re.compile(r'[\W_]+').sub(' ', normalized_subtype)
         if preserve_capitals:
-            normalized_subtype = re.compile(r'(?<=[^\s])([A-Z])').sub(
+            normalized_subtype = re.compile(r'(?<=\S)([A-Z])').sub(
                 ' \\1', normalized_subtype)
         normalized_subtype = normalized_subtype.title()
         normalized_subtype = re.compile(r'\s').sub('', normalized_subtype)

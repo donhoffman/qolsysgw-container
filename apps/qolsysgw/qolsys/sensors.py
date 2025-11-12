@@ -2,11 +2,11 @@ import json
 import logging
 import time
 
-from qolsys.exceptions import UnableToParseSensorException
-from qolsys.exceptions import UnknownQolsysSensorException
-from qolsys.observable import QolsysObservable
-from qolsys.partition import QolsysPartition
-from qolsys.utils import find_subclass
+from apps.qolsysgw.qolsys.exceptions import UnableToParseSensorException
+from apps.qolsysgw.qolsys.exceptions import UnknownQolsysSensorException
+from apps.qolsysgw.qolsys.observable import QolsysObservable
+from apps.qolsysgw.qolsys.partition import QolsysPartition
+from apps.qolsysgw.qolsys.utils import find_subclass
 
 
 LOGGER = logging.getLogger(__name__)
@@ -68,7 +68,7 @@ class QolsysSensor(QolsysObservable):
             LOGGER.warning(f"Updating sensor '{self.id}' ({self.name}) with "
                            f"sensor '{sensor.id}' (different id)")
 
-        # Because any of the attributes might have changed and we want to
+        # Because any of the attributes might have changed, and we want to
         # be able to notify of all of those changes separately and only if they
         # happened, we have to add a bit of smart in there
         attributes_updated = False

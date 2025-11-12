@@ -2,24 +2,27 @@ import asyncio
 import json
 import logging
 import ssl
+from typing import Callable, Optional
 
-from qolsys.actions import QolsysAction
-from qolsys.actions import QolsysActionInfo
-from qolsys.events import QolsysEvent
-from qolsys.exceptions import UnknownQolsysEventException
-from qolsys.exceptions import UnknownQolsysSensorException
-from qolsys.utils import LoggerCallback
+from apps.qolsysgw.qolsys.actions import QolsysAction
+from apps.qolsysgw.qolsys.actions import QolsysActionInfo
+from apps.qolsysgw.qolsys.events import QolsysEvent
+from apps.qolsysgw.qolsys.exceptions import QolsysConnectionException
+from apps.qolsysgw.qolsys.exceptions import UnknownQolsysEventException
+from apps.qolsysgw.qolsys.exceptions import UnknownQolsysSensorException
+from apps.qolsysgw.qolsys.utils import LoggerCallback
 
 
 LOGGER = logging.getLogger(__name__)
 
 
 class QolsysSocket(object):
-    def __init__(self, hostname: str, port: int = None, token: str = None,
-                 logger=None, callback: callable = None,
-                 connected_callback: callable = None,
-                 disconnected_callback: callable = None,
-                 keep_alive: int = None) -> None:
+    def __init__(self, hostname: str, port: Optional[int] = None, token: Optional[str] = None,
+                 logger: Optional[logging.Logger] = None, callback: Optional[Callable] = None,
+                 connected_callback: Optional[Callable] = None,
+                 disconnected_callback: Optional[Callable] = None,
+                 keep_alive: Optional[int] = None) -> None:
+        self._listen = None
         self._hostname = hostname
         self._port = port or 12345
         self._token = token or ''
@@ -40,7 +43,7 @@ class QolsysSocket(object):
 
     async def send(self, action: QolsysAction):
         if self._writer is None:
-            raise Exception('No writer')
+            raise QolsysConnectionException('Cannot send action: socket writer not available')
 
         self._logger.debug(f'Sending: {action.with_token(self._token)}')
         self._writer.write(action.with_token(self._token).encode())
@@ -104,14 +107,16 @@ class QolsysSocket(object):
                         self._logger.debug(f'Unknown sensor in Qolsys event: {line}')
                         continue
 
+                    # noinspection PyBroadException
                     try:
                         await self._callback(event)
-                    except:  # noqa: E722
+                    except Exception:
                         self._logger.exception(f'Error calling callback for event: {line}')
             except asyncio.exceptions.CancelledError:
                 self._listen = False
                 self._logger.info('listening cancelled')
-            except:  # noqa: E722
+            except (OSError, ssl.SSLError):
+                # Catch network/connection errors that should trigger reconnection
                 delay_reconnect = min(delay_reconnect * 2 or 1, 60)
                 self._logger.exception('error while listening')
             finally:
@@ -123,7 +128,8 @@ class QolsysSocket(object):
                     writer.close()
                     try:
                         await writer.wait_closed()
-                    except:  # noqa: E722
+                    except OSError:
+                        # Socket already closed or other socket errors during cleanup
                         self._logger.exception(
                             'unable to wait for writer to '
                             'be fully closed; this might not be an issue if '

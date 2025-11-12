@@ -139,13 +139,14 @@ class MqttClient:
 - Add YAML file loading (optional)
 - Add validation using Pydantic or dataclasses
 - Support both old `apps.yaml` format and new env var format for migration
+- **User code validation**: Support both 4-digit and 6-digit codes (panels can be configured for either length)
 
 **Configuration mapping**:
 ```python
 # Environment Variables (example)
 QOLSYS_PANEL_HOST=192.168.1.100
 QOLSYS_PANEL_TOKEN=abc123...
-QOLSYS_PANEL_USER_CODE=1234
+QOLSYS_PANEL_USER_CODE=123456  # 4 or 6 digits supported
 
 MQTT_HOST=mosquitto
 MQTT_PORT=1883
@@ -349,50 +350,50 @@ pyyaml>=6.0  # Optional YAML config file support
 ## Implementation Phases
 
 ### Phase 1: Core Refactoring
-- [ ] Create `requirements.txt` with dependencies (aiomqtt>=2.0.0, pydantic>=2.0, python-dotenv>=1.0.0, pyyaml>=6.0)
-- [ ] Create `.env.example` with all configuration variables
-- [ ] Create `qolsysgw/__init__.py` (if needed for package structure)
-- [ ] Create `qolsysgw/__main__.py` entry point
-  - [ ] Implement signal handlers (SIGTERM/SIGINT)
-  - [ ] Implement configuration loading
-  - [ ] Implement logging setup
-  - [ ] Implement main async event loop with TaskGroup
-- [ ] Create `qolsysgw/mqtt/client.py` aiomqtt wrapper
-  - [ ] Implement `connect()` method with LWT support
-  - [ ] Implement `disconnect()` method
-  - [ ] Implement `publish()` method
-  - [ ] Implement `subscribe()` method with callback support
-  - [ ] Implement auto-reconnect logic
-  - [ ] Implement message listener loop
-- [ ] Refactor `qolsysgw/config.py` for Pydantic models
-  - [ ] Create Pydantic models for Panel config
-  - [ ] Create Pydantic models for MQTT config
-  - [ ] Create Pydantic models for HA config
-  - [ ] Implement environment variable parsing
-  - [ ] Implement optional YAML config file loading
-  - [ ] Add configuration validation
-- [ ] Refactor `qolsysgw/gateway.py` to remove AppDaemon
-  - [ ] Remove `Mqtt` base class inheritance
-  - [ ] Remove AppDaemon logging handlers
-  - [ ] Replace `self.mqtt_publish()` with mqtt_client calls
-  - [ ] Replace `self.create_task()` with asyncio patterns
-  - [ ] Update initialization to accept config and mqtt_client
-  - [ ] Update `initialize()` to work without AppDaemon
-  - [ ] Update `terminate()` to work without AppDaemon
-- [ ] Update `qolsysgw/mqtt/listener.py` for direct MQTT
-  - [ ] Remove AppDaemon event system dependencies
-  - [ ] Refactor `MqttQolsysEventListener` for direct subscriptions
-  - [ ] Refactor `MqttQolsysControlListener` for direct subscriptions
-  - [ ] Update callback handling for aiomqtt
-- [ ] Update `qolsysgw/mqtt/updater.py` to work without AppDaemon
-  - [ ] Replace AppDaemon logging calls
-  - [ ] Update MQTT publish calls to use mqtt_client
-  - [ ] Verify discovery message format
-- [ ] Set up plain text logging with timestamps
-  - [ ] Configure root logger
-  - [ ] Add formatter with timestamps
-  - [ ] Support LOG_LEVEL environment variable
-  - [ ] Remove AppDaemon logging components
+- [x] Create `requirements.txt` with dependencies (aiomqtt>=2.0.0, pydantic>=2.0, python-dotenv>=1.0.0, pyyaml>=6.0)
+- [x] Create `.env.example` with all configuration variables
+- [x] Create `qolsysgw/__init__.py` (if needed for package structure)
+- [x] Create `qolsysgw/__main__.py` entry point
+  - [x] Implement signal handlers (SIGTERM/SIGINT)
+  - [x] Implement configuration loading
+  - [x] Implement logging setup
+  - [x] Implement main async event loop with TaskGroup
+- [x] Create `qolsysgw/mqtt/client.py` aiomqtt wrapper
+  - [x] Implement `connect()` method with LWT support
+  - [x] Implement `disconnect()` method
+  - [x] Implement `publish()` method
+  - [x] Implement `subscribe()` method with callback support
+  - [x] Implement auto-reconnect logic
+  - [x] Implement message listener loop
+- [x] Refactor `qolsysgw/config.py` for Pydantic models
+  - [x] Create Pydantic models for Panel config
+  - [x] Create Pydantic models for MQTT config
+  - [x] Create Pydantic models for HA config
+  - [x] Implement environment variable parsing
+  - [x] Implement optional YAML config file loading
+  - [x] Add configuration validation
+- [x] Refactor `qolsysgw/gateway.py` to remove AppDaemon
+  - [x] Remove `Mqtt` base class inheritance
+  - [x] Remove AppDaemon logging handlers
+  - [x] Replace `self.mqtt_publish()` with mqtt_client calls
+  - [x] Replace `self.create_task()` with asyncio patterns
+  - [x] Update initialization to accept config and mqtt_client
+  - [x] Update `initialize()` to work without AppDaemon
+  - [x] Update `terminate()` to work without AppDaemon
+- [x] Update `qolsysgw/mqtt/listener.py` for direct MQTT
+  - [x] Remove AppDaemon event system dependencies
+  - [x] Refactor `MqttQolsysEventListener` for direct subscriptions
+  - [x] Refactor `MqttQolsysControlListener` for direct subscriptions
+  - [x] Update callback handling for aiomqtt
+- [x] Update `qolsysgw/mqtt/updater.py` to work without AppDaemon
+  - [x] Replace AppDaemon logging calls
+  - [x] Update MQTT publish calls to use mqtt_client
+  - [x] Verify discovery message format
+- [x] Set up plain text logging with timestamps
+  - [x] Configure root logger
+  - [x] Add formatter with timestamps
+  - [x] Support LOG_LEVEL environment variable
+  - [x] Remove AppDaemon logging components
 - [ ] Create new unit tests for new components
   - [ ] Create `tests/unit/mqtt/test_client.py` for MqttClient
     - [ ] Test connect/disconnect

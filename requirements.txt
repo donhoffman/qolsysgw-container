@@ -1,0 +1,14 @@
+# Core dependencies for standalone qolsysgw application (v2.0.0)
+
+# MQTT client - async-first library built on paho-mqtt
+aiomqtt>=2.0.0
+
+# Configuration validation and settings management
+pydantic>=2.0
+pydantic-settings>=2.0
+
+# Environment variable support for development
+python-dotenv>=1.0.0
+
+# Optional YAML config file support
+pyyaml>=6.0

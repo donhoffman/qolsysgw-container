@@ -3,12 +3,12 @@ import logging
 
 from types import SimpleNamespace
 
-from qolsys.exceptions import UnableToParseEventException
-from qolsys.exceptions import UnknownQolsysEventException
-from qolsys.exceptions import UnknownQolsysSensorException
-from qolsys.partition import QolsysPartition
-from qolsys.utils import find_subclass
-from qolsys.sensors import QolsysSensor
+from apps.qolsysgw.qolsys.exceptions import UnableToParseEventException
+from apps.qolsysgw.qolsys.exceptions import UnknownQolsysEventException
+from apps.qolsysgw.qolsys.exceptions import UnknownQolsysSensorException
+from apps.qolsysgw.qolsys.partition import QolsysPartition
+from apps.qolsysgw.qolsys.sensors import QolsysSensor
+from apps.qolsysgw.qolsys.utils import find_subclass
 
 LOGGER = logging.getLogger(__name__)
 
@@ -245,6 +245,8 @@ class QolsysEventZoneEventActive(QolsysEventZoneEvent):
 
 
 class _QolsysEventZoneEventFullZone(QolsysEventZoneEvent):
+    # Subclasses must define this
+    _ZONE_EVENT_TYPE: str = None
 
     def __init__(self, zone: QolsysSensor, *args, **kwargs) -> None:
         if self.__class__ == _QolsysEventZoneEventFullZone:
@@ -343,6 +345,7 @@ class QolsysEventAlarm(QolsysEvent):
         self._partition_id = partition_id
         self._alarm_type = alarm_type or None
         self._version = version
+        self._delay = None
 
     @property
     def partition_id(self):

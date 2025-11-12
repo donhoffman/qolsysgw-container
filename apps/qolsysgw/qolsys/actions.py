@@ -15,6 +15,10 @@ class QolsysAction(object):
         'version': 0,
     }
 
+    def __init__(self):
+        """Initialize action. Subclasses must set _data in their __init__."""
+        self._data: dict = {}
+
     @property
     def data(self) -> dict:
         return {**self._DEFAULT_DATA, **self._data}
@@ -36,6 +40,7 @@ class QolsysAction(object):
 
 class QolsysActionInfo(QolsysAction):
     def __init__(self) -> None:
+        super().__init__()
         self._data = {
             'action': 'INFO',
             'info_type': 'SUMMARY',
@@ -52,6 +57,7 @@ class QolsysActionArm(QolsysAction):
 
     def __init__(self, arm_type: str, partition_id: int,
                  panel_code: str = None) -> None:
+        super().__init__()
         self._data = {
             'action': 'ARMING',
             'arming_type': arm_type,
@@ -98,6 +104,7 @@ class QolsysActionTrigger(QolsysAction):
     ALARM_TYPE_AUXILIARY = 'AUXILIARY'
 
     def __init__(self, partition_id: int, alarm_type: str = None) -> None:
+        super().__init__()
         self._data = {
             'action': 'ALARM',
             'alarm_type': alarm_type or self.ALARM_TYPE_POLICE,

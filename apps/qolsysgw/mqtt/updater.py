@@ -1,52 +1,55 @@
 import json
 import logging
 import posixpath
+from typing import Callable
 
-from mqtt.exceptions import UnknownDeviceClassException
-from mqtt.exceptions import UnknownMqttWrapperException
-from mqtt.utils import normalize_name_to_id
+from apps.qolsysgw.mqtt.exceptions import (
+    UnknownDeviceClassException,
+    UnknownMqttWrapperException,
+)
+from apps.qolsysgw.mqtt.utils import normalize_name_to_id
 
-from qolsys.config import QolsysGatewayConfig
-from qolsys.partition import QolsysPartition
-from qolsys.sensors import QolsysSensor
-from qolsys.sensors import QolsysSensorAuxiliaryPendant
-from qolsys.sensors import QolsysSensorBluetooth
-from qolsys.sensors import QolsysSensorCODetector
-from qolsys.sensors import QolsysSensorDoorWindow
-from qolsys.sensors import QolsysSensorDoorbell
-from qolsys.sensors import QolsysSensorFreeze
-from qolsys.sensors import QolsysSensorGlassBreak
-from qolsys.sensors import QolsysSensorHeat
-from qolsys.sensors import QolsysSensorKeyFob
-from qolsys.sensors import QolsysSensorKeypad
-from qolsys.sensors import QolsysSensorMotion
-from qolsys.sensors import QolsysSensorShock
-from qolsys.sensors import QolsysSensorSiren
-from qolsys.sensors import QolsysSensorSmokeDetector
-from qolsys.sensors import QolsysSensorTakeoverModule
-from qolsys.sensors import QolsysSensorTemperature
-from qolsys.sensors import QolsysSensorTilt
-from qolsys.sensors import QolsysSensorTranslator
-from qolsys.sensors import QolsysSensorWater
-from qolsys.sensors import _QolsysSensorWithoutUpdates
-from qolsys.state import QolsysState
-from qolsys.utils import defaultLoggerCallback
-from qolsys.utils import find_subclass
-
+from apps.qolsysgw.qolsys.config import QolsysGatewayConfig
+from apps.qolsysgw.qolsys.partition import QolsysPartition
+from apps.qolsysgw.qolsys.sensors import (
+    QolsysSensor,
+    QolsysSensorAuxiliaryPendant,
+    QolsysSensorBluetooth,
+    QolsysSensorCODetector,
+    QolsysSensorDoorWindow,
+    QolsysSensorDoorbell,
+    QolsysSensorFreeze,
+    QolsysSensorGlassBreak,
+    QolsysSensorHeat,
+    QolsysSensorKeyFob,
+    QolsysSensorKeypad,
+    QolsysSensorMotion,
+    QolsysSensorShock,
+    QolsysSensorSiren,
+    QolsysSensorSmokeDetector,
+    QolsysSensorTakeoverModule,
+    QolsysSensorTemperature,
+    QolsysSensorTilt,
+    QolsysSensorTranslator,
+    QolsysSensorWater,
+    _QolsysSensorWithoutUpdates,
+)
+from apps.qolsysgw.qolsys.state import QolsysState
+from apps.qolsysgw.qolsys.utils import default_logger_callback, find_subclass
 
 LOGGER = logging.getLogger(__name__)
 
 
 class MqttUpdater(object):
     def __init__(self, state: QolsysState, factory: 'MqttWrapperFactory',
-                 callback: callable = None, logger=None):
+                 callback: Callable = None, logger=None):
         self._factory = factory
-        self._callback = callback or defaultLoggerCallback
+        self._callback = callback or default_logger_callback
         self._logger = logger or LOGGER
 
         state.register(self, callback=self._state_update)
 
-    def _state_update(self, state: QolsysState, change, prev_value=None, new_value=None):
+    def _state_update(self, state: QolsysState, change, _prev_value=None, _new_value=None):
         self._logger.debug(f"Received update from state for CHANGE={change}")
 
         if change == QolsysState.NOTIFY_UPDATE_PARTITIONS:
@@ -97,7 +100,7 @@ class MqttUpdater(object):
 
 class MqttWrapper(object):
 
-    def __init__(self, mqtt_publish: callable, cfg: QolsysGatewayConfig,
+    def __init__(self, mqtt_publish: Callable, cfg: QolsysGatewayConfig,
                  mqtt_plugin_cfg, session_token: str) -> None:
         self._mqtt_publish = mqtt_publish
         self._cfg = cfg
@@ -117,6 +120,20 @@ class MqttWrapper(object):
         # a configuration option to plainly disable it.
         self._mqtt_retain = self._cfg.mqtt_retain and \
             (self._birth_topic == self._will_topic)
+
+    @property
+    def name(self) -> str:
+        """Return entity name. Must be implemented by subclasses."""
+        raise NotImplementedError("Subclasses must implement 'name' property")
+
+    @property
+    def topic_path(self) -> str:
+        """Return MQTT topic path. Must be implemented by subclasses."""
+        raise NotImplementedError("Subclasses must implement 'topic_path' property")
+
+    def configure_payload(self, **kwargs) -> dict:
+        """Return configuration payload. Must be implemented by subclasses."""
+        raise NotImplementedError("Subclasses must implement 'configure_payload' method")
 
     @property
     def entity_id(self):
@@ -194,7 +211,7 @@ class MqttWrapper(object):
                 'payload_not_available': self.payload_unavailable,
             })
 
-        # If we the birth and will topic of the MQTT plugin are the same,
+        # If we know the birth and will topic of the MQTT plugin are the same,
         # we can take advantage of this to consider that the panel is offline
         # when AppDaemon is (since updates won't work at this point)
         if self._will_topic == self._birth_topic:
@@ -266,18 +283,11 @@ class MqttWrapperQolsysState(MqttWrapper):
             self.entity_id,
         )
 
-    def configure_payload(self, **kwargs):
-        payload = {
-            'name': 'Last Error',
-            'device_class': 'timestamp',
-            'state_topic': self.state_topic,
-            'availability_mode': 'all',
-            'availability': self.configure_availability,
-            'json_attributes_topic': self.attributes_topic,
-        }
-
-        payload['unique_id'] = f"{self._cfg.panel_unique_id}_last_error"
-        payload['device'] = self.device_payload
+    def configure_payload(self, **_kwargs):
+        payload = {'name': 'Last Error', 'device_class': 'timestamp', 'state_topic': self.state_topic,
+                   'availability_mode': 'all', 'availability': self.configure_availability,
+                   'json_attributes_topic': self.attributes_topic,
+                   'unique_id': f"{self._cfg.panel_unique_id}_last_error", 'device': self.device_payload}
 
         return payload
 
@@ -352,7 +362,7 @@ class MqttWrapperQolsysPartition(MqttWrapper):
             self.entity_id,
         )
 
-    def configure_payload(self, **kwargs):
+    def configure_payload(self, **_kwargs):
         command_template = {
             'partition_id': str(self._partition.id),
             'action': '{{ action }}',
@@ -369,25 +379,19 @@ class MqttWrapperQolsysPartition(MqttWrapper):
         secure_arm = (self._partition.secure_arm and
                       not self._cfg.panel_user_code)
 
-        payload = {
-            'name': self.name,
-            'state_topic': self.state_topic,
-            'code_arm_required': self._cfg.code_arm_required or secure_arm,
-            'code_disarm_required': self._cfg.code_disarm_required,
-            'code_trigger_required': self._cfg.code_trigger_required or secure_arm,
-            'command_topic': self._cfg.control_topic,
-            'command_template': json.dumps(command_template),
-            'availability_mode': 'all',
-            'availability': self.configure_availability,
-            'json_attributes_topic': self.attributes_topic,
-        }
+        payload = {'name': self.name, 'state_topic': self.state_topic,
+                   'code_arm_required': self._cfg.code_arm_required or secure_arm,
+                   'code_disarm_required': self._cfg.code_disarm_required,
+                   'code_trigger_required': self._cfg.code_trigger_required or secure_arm,
+                   'command_topic': self._cfg.control_topic, 'command_template': json.dumps(command_template),
+                   'availability_mode': 'all', 'availability': self.configure_availability,
+                   'json_attributes_topic': self.attributes_topic,
+                   'unique_id': f"{self._cfg.panel_unique_id}_p{self._partition.id}", 'device': self.device_payload}
 
-        # As we have a unique ID for the panel, we can setup a unique ID for
+        # As we have a unique ID for the panel, we can set up a unique ID for
         # the partition, and create a device to link all of our partitions
         # together; this will also allow to interact with the partition in
-        # the UI, change it's name, assign it to areas, etc.
-        payload['unique_id'] = f"{self._cfg.panel_unique_id}_p{self._partition.id}"
-        payload['device'] = self.device_payload
+        # the UI, change its name, assign it to areas, etc.
 
         if self._cfg.default_trigger_command:
             payload['payload_trigger'] = self._cfg.default_trigger_command
@@ -470,15 +474,15 @@ class MqttWrapperQolsysSensor(MqttWrapper):
             if device_class:
                 return device_class
 
-        errormsg = 'Unable to find a device class to map for '\
+        error_perm_msg = 'Unable to find a device class to map for '\
                    f"sensor type {type(self._sensor).__name__}"
         if self._cfg.default_sensor_device_class:
-            LOGGER.warning(f"{errormsg}, defaulting to "
+            LOGGER.warning(f"{error_perm_msg}, defaulting to "
                            f"'{self._cfg.default_sensor_device_class}' "
                            "device class.")
             return self._cfg.default_sensor_device_class
         else:
-            raise UnknownDeviceClassException(errormsg)
+            raise UnknownDeviceClassException(error_perm_msg)
 
     @property
     def topic_path(self):
@@ -487,29 +491,20 @@ class MqttWrapperQolsysSensor(MqttWrapper):
             self.entity_id,
         )
 
-    def configure_payload(self, partition: QolsysPartition, **kwargs):
-        payload = {
-            'name': self.name,
-            'device_class': self.ha_device_class,
-            'state_topic': self.state_topic,
-            'payload_on': self.PAYLOAD_ON,
-            'payload_off': self.PAYLOAD_OFF,
-            'availability_mode': 'all',
-            'availability': self.configure_availability,
-            'json_attributes_topic': self.attributes_topic,
-            'enabled_by_default': (
-                self._cfg.enable_static_sensors_by_default or
-                not isinstance(self._sensor, _QolsysSensorWithoutUpdates)
-            ),
-        }
+    def configure_payload(self, _partition: QolsysPartition, **_kwargs):
+        payload = {'name': self.name, 'device_class': self.ha_device_class, 'state_topic': self.state_topic,
+                   'payload_on': self.PAYLOAD_ON, 'payload_off': self.PAYLOAD_OFF, 'availability_mode': 'all',
+                   'availability': self.configure_availability, 'json_attributes_topic': self.attributes_topic,
+                   'enabled_by_default': (
+                           self._cfg.enable_static_sensors_by_default or
+                           not isinstance(self._sensor, _QolsysSensorWithoutUpdates)
+                   ), 'unique_id': f"{self._cfg.panel_unique_id}_"
+                                   f"s{normalize_name_to_id(self._sensor.unique_id)}", 'device': self.device_payload}
 
-        # As we have a unique ID for the panel, we can setup a unique ID for
+        # As we have a unique ID for the panel, we can set up a unique ID for
         # the partition, and create a device to link all of our partitions
         # together; this will also allow to interact with the partition in
-        # the UI, change it's name, assign it to areas, etc.
-        payload['unique_id'] = f"{self._cfg.panel_unique_id}_"\
-                               f"s{normalize_name_to_id(self._sensor.unique_id)}"
-        payload['device'] = self.device_payload
+        # the UI, change its name, assign it to areas, etc.
 
         return payload
 
@@ -544,19 +539,14 @@ class MqttWrapperFactory(object):
         self._kwargs = kwargs
 
     def wrap(self, obj):
-        # Search the class that corresponds to that type, and use all the
-        # parents (in order, thanks to the call to mro()) to try and find
-        # one that works by inheritance
         for base in type(obj).mro():
             klass = find_subclass(MqttWrapper, base.__name__,
                                   cache=self.__WRAPPERCLASSES_CACHE,
                                   normalize=False)
             if klass:
-                break
+                return klass(obj, *self._args, **self._kwargs)
 
-        if not klass:
-            raise UnknownMqttWrapperException(
-                f'Unable to wrap object type {type(obj).__name__}'
-            )
+        raise UnknownMqttWrapperException(
+            f'Unable to wrap object type {type(obj).__name__}'
+        )
 
-        return klass(obj, *self._args, **self._kwargs)
