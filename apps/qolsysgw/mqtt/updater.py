@@ -474,8 +474,8 @@ class MqttWrapperQolsysSensor(MqttWrapper):
             if device_class:
                 return device_class
 
-        error_perm_msg = 'Unable to find a device class to map for '\
-                   f"sensor type {type(self._sensor).__name__}"
+        error_perm_msg = 'Unable to find a device class to map for ' \
+                         f"sensor type {type(self._sensor).__name__}"
         if self._cfg.default_sensor_device_class:
             LOGGER.warning(f"{error_perm_msg}, defaulting to "
                            f"'{self._cfg.default_sensor_device_class}' "
@@ -496,8 +496,8 @@ class MqttWrapperQolsysSensor(MqttWrapper):
                    'payload_on': self.PAYLOAD_ON, 'payload_off': self.PAYLOAD_OFF, 'availability_mode': 'all',
                    'availability': self.configure_availability, 'json_attributes_topic': self.attributes_topic,
                    'enabled_by_default': (
-                           self._cfg.enable_static_sensors_by_default or
-                           not isinstance(self._sensor, _QolsysSensorWithoutUpdates)
+                       self._cfg.enable_static_sensors_by_default or
+                       not isinstance(self._sensor, _QolsysSensorWithoutUpdates)
                    ), 'unique_id': f"{self._cfg.panel_unique_id}_"
                                    f"s{normalize_name_to_id(self._sensor.unique_id)}", 'device': self.device_payload}
 
@@ -549,4 +549,3 @@ class MqttWrapperFactory(object):
         raise UnknownMqttWrapperException(
             f'Unable to wrap object type {type(obj).__name__}'
         )
-

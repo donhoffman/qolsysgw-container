@@ -4,15 +4,15 @@ from unittest import mock
 
 import tests.unit.qolsysgw.mqtt.testenv  # noqa: F401
 
-from mqtt.updater import MqttUpdater
-from mqtt.updater import MqttWrapperFactory
-from mqtt.updater import MqttWrapperQolsysState
-from mqtt.updater import MqttWrapperQolsysPartition
-from mqtt.updater import MqttWrapperQolsysSensor
-from qolsys.config import QolsysGatewayConfig
-from qolsys.state import QolsysState
-from qolsys.partition import QolsysPartition
-from qolsys.sensors import QolsysSensor
+from apps.qolsysgw.mqtt.updater import MqttUpdater
+from apps.qolsysgw.mqtt.updater import MqttWrapperFactory
+from apps.qolsysgw.mqtt.updater import MqttWrapperQolsysState
+from apps.qolsysgw.mqtt.updater import MqttWrapperQolsysPartition
+from apps.qolsysgw.mqtt.updater import MqttWrapperQolsysSensor
+from apps.qolsysgw.qolsys.config import QolsysGatewayConfig
+from apps.qolsysgw.qolsys.state import QolsysState
+from apps.qolsysgw.qolsys.partition import QolsysPartition
+from apps.qolsysgw.qolsys.sensors import QolsysSensor
 
 
 import logging
@@ -405,7 +405,7 @@ class TestUnitMqttWrapperQolsys(unittest.TestCase):
         self.maxDiff = None
 
         actual = self.wrapped_sensor.configure_payload(
-            partition=self.partition)
+            self.partition)
 
         expected = {
             'availability': [

@@ -359,4 +359,8 @@ class QolsysConfig(BaseSettings):
 
         # Merge YAML data with environment variables
         # Environment variables will override YAML values automatically via Pydantic
-        return cls(**yaml_data)
+        # If no YAML data, call cls() to let Pydantic load from env vars
+        if yaml_data:
+            return cls(**yaml_data)
+        else:
+            return cls()

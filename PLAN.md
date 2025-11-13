@@ -394,31 +394,31 @@ pyyaml>=6.0  # Optional YAML config file support
   - [x] Add formatter with timestamps
   - [x] Support LOG_LEVEL environment variable
   - [x] Remove AppDaemon logging components
-- [ ] Create new unit tests for new components
-  - [ ] Create `tests/unit/mqtt/test_client.py` for MqttClient
-    - [ ] Test connect/disconnect
-    - [ ] Test publish
-    - [ ] Test subscribe with callbacks
-    - [ ] Test auto-reconnect logic
-    - [ ] Test LWT configuration
-  - [ ] Create `tests/unit/test_config.py` for new config system
-    - [ ] Test environment variable parsing
-    - [ ] Test YAML config loading
-    - [ ] Test config validation (Pydantic)
-    - [ ] Test config precedence (env vars override YAML)
-    - [ ] Test missing required fields
-  - [ ] Create `tests/unit/test_main.py` for __main__.py
-    - [ ] Test signal handler registration
-    - [ ] Test graceful shutdown
-    - [ ] Test configuration loading errors
-- [ ] Update existing unit tests to remove AppDaemon mocks
-  - [ ] Update `tests/unit/test_gateway.py`
-  - [ ] Update `tests/unit/mqtt/test_listener.py`
-  - [ ] Update `tests/unit/mqtt/test_updater.py`
-- [ ] Run test suite: `pytest`
-- [ ] Verify all tests pass
-- [ ] Run linter: `flake8`
-- [ ] Fix any linting issues
+- [x] Create new unit tests for new components
+  - [x] Create `tests/unit/mqtt/test_client.py` for MqttClient
+    - [x] Test connect/disconnect
+    - [x] Test publish
+    - [x] Test subscribe with callbacks
+    - [x] Test auto-reconnect logic
+    - [x] Test LWT configuration
+  - [x] Create `tests/unit/test_config.py` for new config system
+    - [x] Test environment variable parsing
+    - [x] Test YAML config loading
+    - [x] Test config validation (Pydantic)
+    - [x] Test config precedence (env vars override YAML)
+    - [x] Test missing required fields
+  - [x] Create `tests/unit/test_main.py` for __main__.py
+    - [x] Test signal handler registration
+    - [x] Test graceful shutdown
+    - [x] Test configuration loading errors
+- [x] Update existing unit tests to remove AppDaemon mocks
+  - [x] Update `tests/unit/test_gateway.py` (no changes needed - tests still valid)
+  - [x] Update `tests/unit/mqtt/test_listener.py`
+  - [x] Update `tests/unit/mqtt/test_updater.py`
+- [x] Run test suite: `pytest`
+- [x] Verify all tests pass (85 passed, 4 skipped)
+- [x] Run linter: `flake8`
+- [x] Fix any linting issues
 
 **Deliverable**: Runnable Python application that can be executed directly via `python -m qolsysgw` using `.env` file for configuration, with passing unit tests.
 
