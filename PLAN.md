@@ -423,7 +423,7 @@ pyyaml>=6.0  # Optional YAML config file support
 **Deliverable**: Runnable Python application that can be executed directly via `python -m qolsysgw` using `.env` file for configuration, with passing unit tests.
 
 ### Phase 2: Local Development & Testing
-- [ ] Update `.env.example` with comprehensive comments
+- [x] Update `.env.example` with comprehensive comments
 - [ ] Create local `.env` file with real credentials (not committed)
 - [ ] Test: Run `python -m qolsysgw` from command line
 - [ ] Test: Run in PyCharm debugger
