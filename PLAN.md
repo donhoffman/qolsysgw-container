@@ -424,11 +424,11 @@ pyyaml>=6.0  # Optional YAML config file support
 
 ### Phase 2: Local Development & Testing
 - [x] Update `.env.example` with comprehensive comments
-- [ ] Create local `.env` file with real credentials (not committed)
-- [ ] Test: Run `python -m qolsysgw` from command line
-- [ ] Test: Run in PyCharm debugger
-- [ ] Test: Verify MQTT connection establishes
-- [ ] Test: Verify panel connection establishes
+- [x] Create local `.env` file with real credentials (not committed)
+- [x] Test: Run `python -m qolsysgw` from command line
+- [x] Test: Run in PyCharm debugger
+- [x] Test: Verify MQTT connection establishes
+- [x] Test: Verify panel connection establishes
 - [ ] Test: Verify sensors appear in Home Assistant
 - [ ] Test: Verify partitions appear in Home Assistant
 - [ ] Test: Send arm command from HA → verify panel receives

@@ -94,7 +94,8 @@ async def main() -> int:
     """
     try:
         # Load configuration
-        config_file = Path(".env") if Path(".env").exists() else None
+        # Look for YAML config file (not .env - that's loaded automatically by Pydantic)
+        config_file = Path("config.yaml") if Path("config.yaml").exists() else None
         config = QolsysConfig.load(config_file)
 
         LOGGER.info("Configuration loaded successfully")

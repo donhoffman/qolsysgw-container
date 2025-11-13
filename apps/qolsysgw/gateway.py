@@ -109,7 +109,7 @@ class QolsysGateway:
         # Set initial state as unavailable
         # noinspection PyBroadException
         try:
-            self._factory.wrap(self._state).set_unavailable()
+            asyncio.create_task(self._factory.wrap(self._state).set_unavailable())
         except Exception:
             LOGGER.exception('Error setting state unavailable; continuing')
 
@@ -176,13 +176,13 @@ class QolsysGateway:
 
         # Set everything unavailable in MQTT
         if self._state and self._factory:
-            self._factory.wrap(self._state).set_unavailable()
+            await self._factory.wrap(self._state).set_unavailable()
 
             for partition in self._state.partitions:
                 for sensor in partition.sensors:
                     # noinspection PyBroadException
                     try:
-                        self._factory.wrap(sensor).set_unavailable()
+                        await self._factory.wrap(sensor).set_unavailable()
                     except Exception:
                         LOGGER.exception(
                             f"Error setting sensor '{sensor.id}' "
@@ -191,7 +191,7 @@ class QolsysGateway:
 
                 # noinspection PyBroadException
                 try:
-                    self._factory.wrap(partition).set_unavailable()
+                    await self._factory.wrap(partition).set_unavailable()
                 except Exception:
                     LOGGER.exception(
                         f"Error setting partition '{partition.id}' "
@@ -235,7 +235,7 @@ class QolsysGateway:
     async def qolsys_connected_callback(self) -> None:
         """Callback when connected to panel."""
         LOGGER.debug('Panel connected')
-        self._factory.wrap(self._state).configure()
+        await self._factory.wrap(self._state).configure()
 
     async def qolsys_disconnected_callback(self) -> None:
         """Callback when disconnected from panel."""
@@ -243,7 +243,7 @@ class QolsysGateway:
             return
 
         LOGGER.debug('Panel disconnected')
-        self._factory.wrap(self._state).set_unavailable()
+        await self._factory.wrap(self._state).set_unavailable()
 
     async def qolsys_event_callback(self, event: QolsysEvent) -> None:
         """Callback for events from panel.

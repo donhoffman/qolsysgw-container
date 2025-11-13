@@ -359,8 +359,16 @@ class QolsysConfig(BaseSettings):
 
         # Merge YAML data with environment variables
         # Environment variables will override YAML values automatically via Pydantic
-        # If no YAML data, call cls() to let Pydantic load from env vars
         if yaml_data:
             return cls(**yaml_data)
         else:
-            return cls()
+            # When loading from env vars only, we need to explicitly construct nested models
+            # since Pydantic doesn't automatically instantiate nested BaseSettings from env
+            return cls(
+                panel=PanelConfig(),
+                mqtt=MqttConfig(),
+                arming=ArmingConfig(),
+                ha=HomeAssistantConfig(),
+                sensor=SensorConfig(),
+                trigger=TriggerConfig(),
+            )

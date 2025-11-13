@@ -1,3 +1,4 @@
+import asyncio
 import json
 import logging
 import posixpath
@@ -49,7 +50,7 @@ class MqttUpdater(object):
 
         state.register(self, callback=self._state_update)
 
-    def _state_update(self, state: QolsysState, change, _prev_value=None, _new_value=None):
+    def _state_update(self, state: QolsysState, change, prev_value=None, new_value=None):
         self._logger.debug(f"Received update from state for CHANGE={change}")
 
         if change == QolsysState.NOTIFY_UPDATE_PARTITIONS:
@@ -57,18 +58,18 @@ class MqttUpdater(object):
             # all those partitions
             for partition in state.partitions:
                 partition.register(self, callback=self._partition_update)
-                self._factory.wrap(partition).configure()
+                asyncio.create_task(self._factory.wrap(partition).configure())
                 # The partition might already have sensors on it, so register
                 # for each sensor individually too
                 for sensor in partition.sensors:
                     sensor.register(self, callback=self._sensor_update)
-                    self._factory.wrap(sensor).configure(partition=partition)
+                    asyncio.create_task(self._factory.wrap(sensor).configure(partition=partition))
         elif change == QolsysState.NOTIFY_UPDATE_ERROR:
             # An error has happened on qolsysgw, so we want to update the
             # state sensor
             wrapped_state = self._factory.wrap(state)
-            wrapped_state.update_state()
-            wrapped_state.update_attributes()
+            asyncio.create_task(wrapped_state.update_state())
+            asyncio.create_task(wrapped_state.update_attributes())
 
     def _partition_update(self, partition: QolsysPartition, change, prev_value=None, new_value=None):
         self._logger.debug(f"Received update from partition "
@@ -78,14 +79,14 @@ class MqttUpdater(object):
         if change == QolsysPartition.NOTIFY_ADD_SENSOR:
             sensor = new_value
             sensor.register(self, callback=self._sensor_update)
-            self._factory.wrap(sensor).configure(partition=partition)
+            asyncio.create_task(self._factory.wrap(sensor).configure(partition=partition))
         elif change == QolsysPartition.NOTIFY_UPDATE_STATUS:
-            self._factory.wrap(partition).update_state()
+            asyncio.create_task(self._factory.wrap(partition).update_state())
         elif change == QolsysPartition.NOTIFY_UPDATE_SECURE_ARM:
-            self._factory.wrap(partition).configure()
+            asyncio.create_task(self._factory.wrap(partition).configure())
         elif change == QolsysPartition.NOTIFY_UPDATE_ALARM_TYPE or \
                 change == QolsysPartition.NOTIFY_UPDATE_ATTRIBUTES:
-            self._factory.wrap(partition).update_attributes()
+            asyncio.create_task(self._factory.wrap(partition).update_attributes())
 
     def _sensor_update(self, sensor: QolsysSensor, change, prev_value=None, new_value=None):
         self._logger.debug(f"Received update from sensor '{sensor.name}' for "
@@ -93,9 +94,9 @@ class MqttUpdater(object):
                            f"new_value={new_value}")
 
         if change == QolsysSensor.NOTIFY_UPDATE_STATUS:
-            self._factory.wrap(sensor).update_state()
+            asyncio.create_task(self._factory.wrap(sensor).update_state())
         elif change == QolsysSensor.NOTIFY_UPDATE_ATTRIBUTES:
-            self._factory.wrap(sensor).update_attributes()
+            asyncio.create_task(self._factory.wrap(sensor).update_attributes())
 
 
 class MqttWrapper(object):
@@ -223,34 +224,34 @@ class MqttWrapper(object):
 
         return availability
 
-    def configure(self, **kwargs):
-        self._mqtt_publish(
+    async def configure(self, **kwargs):
+        await self._mqtt_publish(
             namespace=self._cfg.mqtt_namespace,
             topic=self.config_topic,
             retain=True,
             payload=json.dumps(self.configure_payload(**kwargs)),
         )
 
-        self.set_available()
-        self.update_state()
-        self.update_attributes()
+        await self.set_available()
+        await self.update_state()
+        await self.update_attributes()
 
-    def update_attributes(self):
+    async def update_attributes(self):
         pass
 
-    def update_state(self):
+    async def update_state(self):
         pass
 
-    def set_available(self):
-        self._mqtt_publish(
+    async def set_available(self):
+        await self._mqtt_publish(
             namespace=self._cfg.mqtt_namespace,
             topic=self.availability_topic,
             retain=self._mqtt_retain,
             payload=self.payload_available,
         )
 
-    def set_unavailable(self):
-        self._mqtt_publish(
+    async def set_unavailable(self):
+        await self._mqtt_publish(
             namespace=self._cfg.mqtt_namespace,
             topic=self.availability_topic,
             retain=True,
@@ -291,7 +292,7 @@ class MqttWrapperQolsysState(MqttWrapper):
 
         return payload
 
-    def update_attributes(self):
+    async def update_attributes(self):
         if self._state.last_exception:
             exc_type = type(self._state.last_exception).__name__
             exc_desc = str(self._state.last_exception)
@@ -299,7 +300,7 @@ class MqttWrapperQolsysState(MqttWrapper):
             exc_type = None
             exc_desc = None
 
-        self._mqtt_publish(
+        await self._mqtt_publish(
             namespace=self._cfg.mqtt_namespace,
             topic=self.attributes_topic,
             retain=self._mqtt_retain,
@@ -309,8 +310,8 @@ class MqttWrapperQolsysState(MqttWrapper):
             }),
         )
 
-    def update_state(self):
-        self._mqtt_publish(
+    async def update_state(self):
+        await self._mqtt_publish(
             namespace=self._cfg.mqtt_namespace,
             topic=self.state_topic,
             retain=self._mqtt_retain,
@@ -407,8 +408,8 @@ class MqttWrapperQolsysPartition(MqttWrapper):
 
         return payload
 
-    def update_attributes(self):
-        self._mqtt_publish(
+    async def update_attributes(self):
+        await self._mqtt_publish(
             namespace=self._cfg.mqtt_namespace,
             topic=self.attributes_topic,
             retain=self._mqtt_retain,
@@ -422,8 +423,8 @@ class MqttWrapperQolsysPartition(MqttWrapper):
             }),
         )
 
-    def update_state(self):
-        self._mqtt_publish(
+    async def update_state(self):
+        await self._mqtt_publish(
             namespace=self._cfg.mqtt_namespace,
             topic=self.state_topic,
             retain=self._mqtt_retain,
@@ -491,7 +492,7 @@ class MqttWrapperQolsysSensor(MqttWrapper):
             self.entity_id,
         )
 
-    def configure_payload(self, _partition: QolsysPartition, **_kwargs):
+    def configure_payload(self, partition: QolsysPartition = None, **_kwargs):
         payload = {'name': self.name, 'device_class': self.ha_device_class, 'state_topic': self.state_topic,
                    'payload_on': self.PAYLOAD_ON, 'payload_off': self.PAYLOAD_OFF, 'availability_mode': 'all',
                    'availability': self.configure_availability, 'json_attributes_topic': self.attributes_topic,
@@ -508,21 +509,21 @@ class MqttWrapperQolsysSensor(MqttWrapper):
 
         return payload
 
-    def update_attributes(self):
+    async def update_attributes(self):
         attributes = {
             k: getattr(self._sensor, k)
             for k in self._sensor.ATTRIBUTES
         }
 
-        self._mqtt_publish(
+        await self._mqtt_publish(
             namespace=self._cfg.mqtt_namespace,
             topic=self.attributes_topic,
             retain=self._mqtt_retain,
             payload=json.dumps(attributes),
         )
 
-    def update_state(self):
-        self._mqtt_publish(
+    async def update_state(self):
+        await self._mqtt_publish(
             namespace=self._cfg.mqtt_namespace,
             topic=self.state_topic,
             retain=self._mqtt_retain,
