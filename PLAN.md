@@ -474,7 +474,7 @@ pyyaml>=6.0  # Optional YAML config file support
 
 **Phase 3 Complete** ✅
 
-### Phase 4: CI/CD & Container Testing
+### Phase 4: CI/CD & Container Registry
 - [ ] Create `.github/workflows/container-build.yaml`
   - [ ] Configure trigger on tags only
   - [ ] Set up Docker Buildx
@@ -482,15 +482,11 @@ pyyaml>=6.0  # Optional YAML config file support
   - [ ] Build multi-arch images (amd64, arm64)
   - [ ] Push to ghcr.io
   - [ ] Tag with version and 'latest'
-- [ ] Create E2E test suite with Docker Compose
-  - [ ] Test multi-container scenario
-  - [ ] Test with external MQTT broker
-  - [ ] Test with mock panel
 - [ ] Test: Verify GitHub Actions workflow (dry run)
-- [ ] Test: Health check functionality in container
-- [ ] Test: Container restart and reconnection
 
-**Deliverable**: Automated container builds and comprehensive container testing.
+**Deliverable**: Automated container builds to GitHub Container Registry.
+
+**Note**: E2E test suite with Docker Compose deferred to after Phase 4 CI/CD setup.
 
 ### Phase 5: Documentation
 - [ ] Update `README.md`
