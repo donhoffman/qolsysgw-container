@@ -1,0 +1,58 @@
+# =============================================================================
+# Qolsys Gateway Docker Compose
+# =============================================================================
+# This docker-compose.yaml runs Qolsys Gateway with an external MQTT broker.
+#
+# Prerequisites:
+#   - MQTT broker already running and accessible
+#   - Qolsys panel accessible from container network
+#
+# Usage:
+#   1. Copy .env.example to .env and configure your settings
+#   2. Update MQTT_HOST to point to your MQTT broker
+#   3. Run: docker compose up -d
+# =============================================================================
+
+services:
+  # ---------------------------------------------------------------------------
+  # Qolsys Gateway
+  # ---------------------------------------------------------------------------
+  qolsysgw:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: qolsysgw:latest
+    container_name: qolsysgw
+    restart: unless-stopped
+
+    # Load environment variables from .env file
+    env_file:
+      - .env
+
+    # Or specify environment variables directly:
+    # environment:
+    #   # Panel Configuration (required)
+    #   - QOLSYS_PANEL_HOST=192.168.1.100
+    #   - QOLSYS_PANEL_TOKEN=your_panel_token_here
+    #
+    #   # MQTT Configuration (required)
+    #   - MQTT_HOST=homeassistant.local  # Or your MQTT broker hostname/IP
+    #   - MQTT_PORT=1883
+    #
+    #   # Optional: MQTT Authentication
+    #   # - MQTT_USERNAME=qolsysgw
+    #   # - MQTT_PASSWORD=secret
+    #
+    #   # Optional: Logging
+    #   - LOG_LEVEL=INFO
+    #
+    #   # Optional: Home Assistant Discovery
+    #   - HA_DISCOVERY_PREFIX=homeassistant
+
+    # Use host network mode to access local MQTT broker and panel
+    # Alternative: Use bridge network and ensure broker/panel are accessible
+    network_mode: host
+
+    # Health check is defined in Dockerfile
+
+    # No ports to expose (MQTT client only)

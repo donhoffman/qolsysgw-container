@@ -63,6 +63,33 @@ omni publish
 hatch publish
 ```
 
+### Docker Commands
+
+```bash
+# Build Docker image
+docker build -t qolsysgw:latest .
+
+# Run with docker-compose (requires .env file)
+docker compose up -d
+
+# View logs
+docker compose logs -f
+
+# Stop container
+docker compose down
+
+# Restart container
+docker compose restart
+
+# Check container status and health
+docker compose ps
+
+# Execute health check manually
+docker compose exec qolsysgw /app/docker-healthcheck.sh
+```
+
+**Note**: The Docker container preserves the `apps/` directory structure to maintain absolute imports used in development.
+
 ### Test Requirements
 
 The project uses different test requirement files:
