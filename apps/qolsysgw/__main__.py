@@ -113,10 +113,9 @@ async def main() -> int:
             port=config.mqtt.port,
             username=config.mqtt.username,
             password=config.mqtt.password,
-            will_topic=config.mqtt.will_topic,
-            will_payload=config.mqtt.will_payload,
-            birth_topic=config.mqtt.birth_topic,
-            birth_payload=config.mqtt.birth_payload,
+            availability_topic=config.panel_availability_topic,
+            availability_payload_online=config.panel_availability_payload_online,
+            availability_payload_offline=config.panel_availability_payload_offline,
             qos=config.mqtt.qos,
             retain=config.mqtt.retain,
         )

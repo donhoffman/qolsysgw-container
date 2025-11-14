@@ -19,9 +19,11 @@ These instructions apply to all tasks you perform in this repository. and should
 
 ## Project Overview
 
-Qolsys Gateway (`qolsysgw`) is an AppDaemon automation that acts as a bridge between Qolsys IQ Panel alarm systems (2/2+/4) and Home Assistant via MQTT. It connects to the panel using the Control4 protocol and publishes sensor/partition states to Home Assistant using MQTT discovery.
+Qolsys Gateway (`qolsysgw`) is a standalone Python application that acts as a bridge between Qolsys IQ Panel alarm systems (2/2+/4) and Home Assistant via MQTT. It connects to the panel using the Control4 protocol and publishes sensor/partition states to Home Assistant using MQTT discovery.
 
-This is a Python 3.8+ project that runs as an AppDaemon app, distributed via HACS (Home Assistant Community Store) and PyPI.
+This is a Python 3.13+ project that runs as a standalone Docker container, distributed via GitHub Container Registry (GHCR) and PyPI.
+
+**Note**: Version 1.x was an AppDaemon automation. Version 2.0+ runs standalone without AppDaemon.
 
 ## Build and Test Commands
 
@@ -83,11 +85,12 @@ The codebase has three main subsystems:
 ### Main Components
 
 #### Gateway (`gateway.py`)
-- `QolsysGateway` class extends AppDaemon's `Mqtt` class
-- Initializes three async workflows:
+- `QolsysGateway` class - standalone gateway orchestrator
+- Initializes four async workflows:
   1. Panel communication via `QolsysSocket`
   2. MQTT event listener (`MqttQolsysEventListener`)
   3. MQTT control listener (`MqttQolsysControlListener`)
+  4. HA status listener (`MqttHAStatusListener`) - detects HA restarts
 - Manages the observable state pattern through `QolsysState`
 - Creates `MqttUpdater` to automatically publish state changes to MQTT
 
@@ -99,16 +102,18 @@ The codebase has three main subsystems:
 - **`state.py`**: `QolsysState` - Central state manager using observable pattern
 - **`partition.py`**: `QolsysPartition` - Represents alarm partitions (contains sensors)
 - **`sensors.py`**: Type-specific sensor classes (DoorWindow, Motion, Smoke, etc.)
-- **`config.py`**: Configuration object built from `apps.yaml` parameters
+- **`config.py`**: Configuration object built from environment variables and optional YAML config
 - **`observable.py`**: Observer pattern implementation for state changes
 
 #### MQTT Interface (`mqtt/`)
+- **`client.py`**: `MqttClient` - aiomqtt wrapper with auto-reconnect and LWT support
 - **`updater.py`**:
   - `MqttUpdater` - Observes state changes and publishes to MQTT
   - `MqttWrapper` hierarchy - Wraps partitions/sensors to send MQTT discovery configs
 - **`listener.py`**:
   - `MqttQolsysEventListener` - Subscribes to panel events (from panel → MQTT → updater)
   - `MqttQolsysControlListener` - Subscribes to HA control commands
+  - `MqttHAStatusListener` - Detects HA restarts and triggers entity reconfiguration
 - **`utils.py`**: Helper functions for MQTT topics/names
 
 ### Key Patterns
@@ -127,31 +132,35 @@ Uses a dynamic class discovery pattern (`find_subclass` in `utils.py`):
 - `from_json()` methods automatically route to correct subclass
 
 #### Async Workflows
-Three concurrent async tasks:
+Two concurrent async tasks:
 1. **Panel listener** (`QolsysSocket.listen()`) - Maintains connection, parses events
 2. **Keep-alive sender** (`QolsysSocket.keep_alive()`) - Sends heartbeat every 4 minutes
-3. **MQTT listeners** - React to incoming MQTT messages via AppDaemon event system
+3. **MQTT listeners** - React to incoming MQTT messages via direct subscriptions
+
+#### HA Restart Detection
+When Home Assistant restarts, it publishes "online" to `homeassistant/status`. The `MqttHAStatusListener` detects this and triggers reconfiguration of all entities, ensuring HA has the latest discovery configs and current state.
 
 ### Test Structure
 
-- `tests/unit/` - Unit tests with mocked AppDaemon/MQTT
+- `tests/unit/` - Unit tests with mocked MQTT client
 - `tests/integration/` - Integration tests with mock panel
-- `tests/end-to-end/` - Full stack tests with Docker (AppDaemon + MQTT + mock panel)
-- `tests/mock_modules/` - Mock implementations of AppDaemon and test utilities
+- `tests/end-to-end/` - Full stack tests with Docker (standalone container + MQTT + mock panel)
+- `tests/mock_modules/` - Mock implementations and test utilities
 
 ### Important Configuration
 
-The gateway is configured via AppDaemon's `apps.yaml`:
-- Required: `panel_host`, `panel_token` (from Qolsys Control4 interface)
-- Optional: User codes, arm delays, bypass settings, MQTT topics
-- See README.md configuration section for full details
+The gateway is configured via environment variables and optional YAML config:
+- Required: `QOLSYS_PANEL_HOST`, `QOLSYS_PANEL_TOKEN` (from Qolsys Control4 interface)
+- Required: `MQTT_HOST` (MQTT broker hostname)
+- Optional: User codes, arm delays, bypass settings, MQTT topics, HA status detection
+- See `.env.example` for all configuration options
 
 ### Logging
 
-The gateway redirects Python's `logging` module to AppDaemon's logger:
-- Uses custom `AppDaemonLoggingHandler` and `AppDaemonLoggingFilter`
+The gateway uses standard Python logging:
+- Logs to stdout with plain text format and timestamps
 - All submodules use standard `logging.getLogger(__name__)`
-- AppDaemon log level controls what appears in logs
+- Log level controlled via `LOG_LEVEL` environment variable (DEBUG, INFO, WARNING, ERROR, CRITICAL)
 
 ## Development Notes
 

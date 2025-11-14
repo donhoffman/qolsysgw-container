@@ -7,6 +7,7 @@ from typing import Optional
 
 from apps.qolsysgw.config import QolsysConfig
 from apps.qolsysgw.mqtt.client import MqttClient
+from apps.qolsysgw.mqtt.listener import MqttHAStatusListener
 from apps.qolsysgw.mqtt.listener import MqttQolsysControlListener
 from apps.qolsysgw.mqtt.listener import MqttQolsysEventListener
 from apps.qolsysgw.mqtt.updater import MqttUpdater
@@ -96,10 +97,9 @@ class QolsysGateway:
         self._factory = MqttWrapperFactory(
             mqtt_publish=self._mqtt_publish_wrapper,
             cfg=self._legacy_config,
-            mqtt_plugin_cfg={
-                'birth_topic': self._config.mqtt.birth_topic,
-                'birth_payload': self._config.mqtt.birth_payload,
-            },
+            availability_topic=self._config.panel_availability_topic,
+            availability_payload_online=self._config.panel_availability_payload_online,
+            availability_payload_offline=self._config.panel_availability_payload_offline,
             session_token=self._session_token,
         )
 
@@ -134,6 +134,15 @@ class QolsysGateway:
             callback=self.mqtt_control_callback,
         )
         await control_listener.start()
+
+        # Create MQTT HA status listener (detects HA restarts)
+        ha_status_listener = MqttHAStatusListener(
+            mqtt_client=self._mqtt_client,
+            topic=self._config.ha.status_topic,
+            online_payload=self._config.ha.status_online_payload,
+            callback=self.ha_online_callback,
+        )
+        await ha_status_listener.start()
 
         # Create Qolsys socket for panel communication
         self._qolsys_socket = QolsysSocket(
@@ -359,6 +368,23 @@ class QolsysGateway:
 
         else:
             LOGGER.info(f'UNCAUGHT event {event}; ignored')
+
+    async def ha_online_callback(self) -> None:
+        """Callback when Home Assistant comes online.
+
+        Reconfigures all entities to ensure HA has the latest discovery
+        configs and current state after restarting.
+        """
+        LOGGER.info('Home Assistant came online, reconfiguring all entities')
+
+        # Reconfigure panel (main alarm control panel entity)
+        await self._factory.wrap(self._state).configure()
+
+        # Reconfigure all partitions and sensors
+        for partition in self._state.partitions:
+            await self._factory.wrap(partition).configure()
+            for sensor in partition.sensors:
+                await self._factory.wrap(sensor).configure(partition=partition)
 
     async def mqtt_control_callback(self, control: QolsysControl) -> None:
         """Callback for control messages from MQTT (Home Assistant).

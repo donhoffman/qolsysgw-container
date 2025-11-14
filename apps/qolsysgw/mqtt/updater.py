@@ -102,25 +102,21 @@ class MqttUpdater(object):
 class MqttWrapper(object):
 
     def __init__(self, mqtt_publish: Callable, cfg: QolsysGatewayConfig,
-                 mqtt_plugin_cfg, session_token: str) -> None:
+                 availability_topic: str,
+                 availability_payload_online: str,
+                 availability_payload_offline: str,
+                 session_token: str) -> None:
         self._mqtt_publish = mqtt_publish
         self._cfg = cfg
 
-        self._birth_topic = mqtt_plugin_cfg.get('birth_topic')
-        self._will_topic = mqtt_plugin_cfg.get('will_topic')
-        self._birth_payload = mqtt_plugin_cfg.get('birth_payload')
-        self._will_payload = mqtt_plugin_cfg.get('will_payload')
+        self._availability_topic = availability_topic
+        self._availability_payload_online = availability_payload_online
+        self._availability_payload_offline = availability_payload_offline
 
         self._session_token = session_token
 
-        # This is an interesting thing: we can improve the behavior of the
-        # plugin by using retain=True, but we need to be able to depend on
-        # AppDaemon's status (and LWT message) to tell us when the connection
-        # to the system is offline. This approach might also create weird
-        # behaviors if we remove or add sensors between runs, so there is
-        # a configuration option to plainly disable it.
-        self._mqtt_retain = self._cfg.mqtt_retain and \
-            (self._birth_topic == self._will_topic)
+        # Retain is enabled for all messages since we have proper LWT support
+        self._mqtt_retain = self._cfg.mqtt_retain
 
     @property
     def name(self) -> str:
@@ -197,32 +193,18 @@ class MqttWrapper(object):
 
     @property
     def configure_availability(self):
-        availability = [
+        """Return availability configuration for MQTT discovery.
+
+        All entities reference the panel availability topic (with LWT),
+        which ensures they go unavailable if the gateway crashes or disconnects.
+        """
+        return [
             {
-                'topic': self.device_availability_topic,
-                'payload_available': self.payload_available,
-                'payload_not_available': self.payload_unavailable,
+                'topic': self._availability_topic,
+                'payload_available': self._availability_payload_online,
+                'payload_not_available': self._availability_payload_offline,
             },
         ]
-
-        if self.availability_topic != self.device_availability_topic:
-            availability.append({
-                'topic': self.availability_topic,
-                'payload_available': self.payload_available,
-                'payload_not_available': self.payload_unavailable,
-            })
-
-        # If we know the birth and will topic of the MQTT plugin are the same,
-        # we can take advantage of this to consider that the panel is offline
-        # when AppDaemon is (since updates won't work at this point)
-        if self._will_topic == self._birth_topic:
-            availability.append({
-                'topic': self._will_topic,
-                'payload_available': self._birth_payload,
-                'payload_not_available': self._will_payload,
-            })
-
-        return availability
 
     async def configure(self, **kwargs):
         await self._mqtt_publish(
@@ -341,6 +323,14 @@ class MqttWrapperQolsysPartition(MqttWrapper):
         super().__init__(*args, **kwargs)
 
         self._partition = partition
+
+    async def set_available(self):
+        """Partitions use panel availability topic - no individual publishing needed."""
+        pass
+
+    async def set_unavailable(self):
+        """Partitions use panel availability topic - no individual publishing needed."""
+        pass
 
     @property
     def name(self):
@@ -463,6 +453,14 @@ class MqttWrapperQolsysSensor(MqttWrapper):
         super().__init__(*args, **kwargs)
 
         self._sensor = sensor
+
+    async def set_available(self):
+        """Sensors use panel availability topic - no individual publishing needed."""
+        pass
+
+    async def set_unavailable(self):
+        """Sensors use panel availability topic - no individual publishing needed."""
+        pass
 
     @property
     def name(self):

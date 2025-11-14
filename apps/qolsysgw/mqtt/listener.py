@@ -131,3 +131,58 @@ class MqttQolsysControlListener(MqttListener):
                 await self._callback(control)
             except Exception:
                 self._logger.exception(f'Error calling callback for control: {control}')
+
+
+class MqttHAStatusListener(MqttListener):
+    """Listener for Home Assistant status messages.
+
+    Subscribes to the HA status topic (typically homeassistant/status) to
+    detect when Home Assistant restarts. When HA publishes its "online"
+    message, this triggers reconfiguration of all entities to ensure HA
+    has the latest discovery configs and state.
+    """
+
+    def __init__(
+        self,
+        mqtt_client: MqttClient,
+        topic: str,
+        online_payload: str,
+        callback: Optional[Callable] = None,
+        logger: Optional[logging.Logger] = None,
+    ):
+        """Initialize HA status listener.
+
+        Args:
+            mqtt_client: MQTT client instance
+            topic: HA status topic (typically homeassistant/status)
+            online_payload: Payload indicating HA is online (typically "online")
+            callback: Callback function to invoke when HA comes online
+            logger: Logger instance (optional)
+        """
+        super().__init__(mqtt_client, topic, callback, logger)
+        self._online_payload = online_payload
+
+    async def event_callback(self, topic: str, payload: str) -> None:
+        """Process HA status message.
+
+        Args:
+            topic: MQTT topic
+            payload: Status payload (e.g., "online")
+        """
+        self._logger.debug(f'Received HA status on {topic}: {payload}')
+
+        if not payload:
+            self._logger.debug(f'Received empty status on {topic}')
+            return
+
+        # Check if HA is coming online
+        if payload.strip() == self._online_payload:
+            self._logger.info('Home Assistant came online, triggering reconfiguration')
+
+            # Call the user callback if provided
+            if self._callback:
+                # noinspection PyBroadException
+                try:
+                    await self._callback()
+                except Exception:
+                    self._logger.exception('Error calling HA online callback')

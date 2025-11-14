@@ -18,10 +18,9 @@ class MqttClient:
         port: int = 1883,
         username: Optional[str] = None,
         password: Optional[str] = None,
-        will_topic: Optional[str] = None,
-        will_payload: str = "offline",
-        birth_topic: Optional[str] = None,
-        birth_payload: str = "online",
+        availability_topic: Optional[str] = None,
+        availability_payload_online: str = "online",
+        availability_payload_offline: str = "offline",
         qos: int = 1,
         retain: bool = True,
     ):
@@ -32,10 +31,9 @@ class MqttClient:
             port: MQTT broker port
             username: MQTT username (optional)
             password: MQTT password (optional)
-            will_topic: Last will topic (optional)
-            will_payload: Last will payload
-            birth_topic: Birth message topic (optional)
-            birth_payload: Birth message payload
+            availability_topic: Availability topic for LWT (optional)
+            availability_payload_online: Payload indicating online/available
+            availability_payload_offline: Payload indicating offline/unavailable
             qos: Default QoS level (0-2)
             retain: Retain messages by default
         """
@@ -43,10 +41,9 @@ class MqttClient:
         self.port = port
         self.username = username
         self.password = password
-        self.will_topic = will_topic
-        self.will_payload = will_payload
-        self.birth_topic = birth_topic
-        self.birth_payload = birth_payload
+        self.availability_topic = availability_topic
+        self.availability_payload_online = availability_payload_online
+        self.availability_payload_offline = availability_payload_offline
         self.qos = qos
         self.retain = retain
 
@@ -64,10 +61,10 @@ class MqttClient:
     async def connect(self) -> None:
         """Connect to MQTT broker with LWT support."""
         will = None
-        if self.will_topic:
+        if self.availability_topic:
             will = Will(
-                topic=self.will_topic,
-                payload=self.will_payload,
+                topic=self.availability_topic,
+                payload=self.availability_payload_offline,
                 qos=self.qos,
                 retain=self.retain,
             )
@@ -87,14 +84,14 @@ class MqttClient:
 
         LOGGER.info("Connected to MQTT broker")
 
-        # Publish birth message
-        if self.birth_topic:
+        # Publish online availability message
+        if self.availability_topic:
             await self.publish(
-                self.birth_topic,
-                self.birth_payload,
+                self.availability_topic,
+                self.availability_payload_online,
                 retain=self.retain,
             )
-            LOGGER.info(f"Published birth message to {self.birth_topic}")
+            LOGGER.info(f"Published online message to {self.availability_topic}")
 
         # Resubscribe to all topics
         if self._subscriptions:
@@ -142,14 +139,24 @@ class MqttClient:
         qos = qos if qos is not None else self.qos
         retain = retain if retain is not None else self.retain
 
+        # Log the actual types and values being passed
+        LOGGER.debug(f"Publishing: topic={topic}, qos={qos} (type={type(qos).__name__}), retain={retain} (type={type(retain).__name__})")
+
         try:
             await self._client.publish(
-                topic,
+                topic=topic,
                 payload=payload,
                 qos=qos,
                 retain=retain,
             )
-            LOGGER.debug(f"Published to {topic}: {payload}")
+            # Truncate payload for logging if it's too long
+            if payload is None:
+                payload_preview = 'None'
+            elif len(payload) > 100:
+                payload_preview = payload[:100] + '...'
+            else:
+                payload_preview = payload
+            LOGGER.debug(f"Published to {topic} (retain={retain}, qos={qos}): {payload_preview}")
         except MqttError as e:
             LOGGER.error(f"Failed to publish to {topic}: {e}")
             raise

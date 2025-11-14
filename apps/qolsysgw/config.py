@@ -116,22 +116,6 @@ class MqttConfig(BaseSettings):
     username: Optional[str] = Field(default=None, description="MQTT username")
     password: Optional[str] = Field(default=None, description="MQTT password")
 
-    birth_topic: str = Field(
-        default="homeassistant/status",
-        description="Topic for birth message",
-    )
-    birth_payload: str = Field(
-        default="online",
-        description="Payload for birth message",
-    )
-    will_topic: str = Field(
-        default="homeassistant/status",
-        description="Topic for last will message",
-    )
-    will_payload: str = Field(
-        default="offline",
-        description="Payload for last will message",
-    )
     qos: int = Field(
         default=1,
         ge=0,
@@ -157,6 +141,14 @@ class HomeAssistantConfig(BaseSettings):
     discovery_prefix: str = Field(
         default="homeassistant",
         description="MQTT discovery prefix",
+    )
+    status_topic: str = Field(
+        default="",
+        description="HA status topic for detecting HA restarts (defaults to {discovery_prefix}/status)",
+    )
+    status_online_payload: str = Field(
+        default="online",
+        description="Payload indicating HA is online",
     )
     check_user_code: bool = Field(
         default=True,
@@ -279,7 +271,7 @@ class QolsysConfig(BaseSettings):
 
     # Additional fields for backward compatibility
     event_topic: str = Field(
-        default="qolsys/{panel_unique_id}/event",
+        default="{discovery_prefix}/{panel_unique_id}/event",
         description="Topic for panel events",
     )
     control_topic: str = Field(
@@ -291,17 +283,44 @@ class QolsysConfig(BaseSettings):
         description="User control token for MQTT authentication",
     )
 
+    @property
+    def panel_availability_topic(self) -> str:
+        """Get the panel availability topic for MQTT LWT.
+
+        This is the topic that all entities will reference for availability.
+        Format: {discovery_prefix}/alarm_control_panel/{panel_unique_id}/availability
+        """
+        return (
+            f"{self.ha.discovery_prefix}/alarm_control_panel/"
+            f"{self.panel.unique_id}/availability"
+        )
+
+    @property
+    def panel_availability_payload_online(self) -> str:
+        """Payload indicating panel is online/available."""
+        return "online"
+
+    @property
+    def panel_availability_payload_offline(self) -> str:
+        """Payload indicating panel is offline/unavailable."""
+        return "offline"
+
     @model_validator(mode="after")
     def validate_and_apply_defaults(self) -> "QolsysConfig":
         """Validate configuration and apply smart defaults."""
         # Format topic templates
         self.event_topic = self.event_topic.format(
+            discovery_prefix=self.ha.discovery_prefix,
             panel_unique_id=self.panel.unique_id
         )
         self.control_topic = self.control_topic.format(
             discovery_prefix=self.ha.discovery_prefix,
             panel_unique_id=self.panel.unique_id,
         )
+
+        # Set default HA status topic if not provided
+        if not self.ha.status_topic:
+            self.ha.status_topic = f"{self.ha.discovery_prefix}/status"
 
         # Validate HA user code settings
         if self.panel.user_code is None:

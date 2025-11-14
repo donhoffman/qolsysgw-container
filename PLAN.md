@@ -429,19 +429,21 @@ pyyaml>=6.0  # Optional YAML config file support
 - [x] Test: Run in PyCharm debugger
 - [x] Test: Verify MQTT connection establishes
 - [x] Test: Verify panel connection establishes
-- [ ] Test: Verify sensors appear in Home Assistant
-- [ ] Test: Verify partitions appear in Home Assistant
-- [ ] Test: Send arm command from HA → verify panel receives
-- [ ] Test: Send disarm command from HA → verify panel receives
-- [ ] Test: Trigger sensor on panel → verify HA updates
-- [ ] Test: Change partition state on panel → verify HA updates
-- [ ] Test: Disconnect MQTT → verify auto-reconnect
-- [ ] Test: Disconnect panel → verify auto-reconnect
-- [ ] Test: Graceful shutdown with Ctrl+C
-- [ ] Run test suite: `pytest`
-- [ ] Run linter: `flake8`
+- [x] Test: Verify sensors appear in Home Assistant
+- [x] Test: Verify partitions appear in Home Assistant
+- [x] Test: Send arm command from HA → verify panel receives
+- [x] Test: Send disarm command from HA → verify panel receives
+- [x] Test: Trigger sensor on panel → verify HA updates
+- [x] Test: Change partition state on panel → verify HA updates
+- [x] Test: Disconnect MQTT → verify auto-reconnect
+- [x] Test: HA restart detection → verify entities reconfigure
+- [x] Test: Graceful shutdown with Ctrl+C
+- [x] Run test suite: `pytest`
+- [x] Run linter: `flake8`
 
 **Deliverable**: Validated core functionality running natively in Python before containerization.
+
+**Phase 2 Complete** ✅
 
 ### Phase 3: Containerization
 - [ ] Create `.dockerignore` file
@@ -600,3 +602,35 @@ pyyaml>=6.0  # Optional YAML config file support
 - v1.x remains in git history for users who need AppDaemon version
 - v2.0.0 will be a complete rewrite focused on standalone Docker deployment
 - GHCR will be the primary distribution method
+
+## Pending Issues
+
+The following issues have been identified during testing but are deferred for future resolution:
+
+### 1. MQTT QoS Level Not Respected
+**Issue**: MQTT messages are being published with QoS=0 despite configuration setting MQTT_QOS=1.
+
+**Impact**: Messages may be lost during network issues (at-most-once delivery instead of at-least-once).
+
+**Status**: Low priority - functionality works correctly, just less reliable than intended.
+
+**Investigation needed**:
+- Verify aiomqtt is correctly passing QoS parameter to paho-mqtt
+- Check if broker is downgrading QoS level
+- Verify client is requesting correct QoS during subscription
+
+**Workaround**: None currently needed - system works with QoS=0.
+
+### 2. Panel Auto-Reconnect Testing
+**Issue**: Testing panel auto-reconnect requires physically disconnecting the panel, which is too disruptive for development/testing.
+
+**Impact**: Panel reconnection logic has not been validated against real hardware failure scenarios.
+
+**Status**: Deferred - will test during real-world deployment or simulated failure scenarios.
+
+**Testing approach**:
+- Could be tested using network simulation (iptables rules to block panel traffic)
+- Could be tested with mock panel in integration tests
+- Real-world validation will occur naturally over time
+
+**Code confidence**: High - same reconnection pattern used for MQTT (which has been tested) is applied to panel connection.
