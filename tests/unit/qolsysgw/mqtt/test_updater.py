@@ -1,3 +1,4 @@
+import asyncio
 import unittest
 
 from unittest import mock
@@ -20,6 +21,16 @@ logging.basicConfig(level=logging.DEBUG)
 
 
 class TestUnitMqttUpdater(unittest.TestCase):
+
+    def setUp(self):
+        """Set up test fixtures and patch asyncio.create_task."""
+        # Patch asyncio.create_task to avoid "no running event loop" errors
+        self.create_task_patcher = mock.patch('asyncio.create_task', side_effect=lambda coro: coro)
+        self.mock_create_task = self.create_task_patcher.start()
+
+    def tearDown(self):
+        """Clean up patches."""
+        self.create_task_patcher.stop()
 
     def test_unit_init_register_for_state_updates(self):
         state = mock.create_autospec(QolsysState)
@@ -264,19 +275,10 @@ class TestUnitMqttWrapperQolsys(unittest.TestCase):
         mqtt_publish = mock.MagicMock()
         session_token = 'TestSessionToken'
 
-        # Mock plugin configuration
-        mqtt_plugin_cfg = mock.MagicMock()
-        self.mqtt_plugin_cfg_get = {
-            'birth_topic': 'appdaemon',
-            'will_topic': 'appdaemon',
-            'birth_payload': 'online',
-            'will_payload': 'offline',
-        }
-
-        def mqtt_plugin_cfg_get(cfg):
-            return self.mqtt_plugin_cfg_get[cfg]
-
-        mqtt_plugin_cfg.get.side_effect = mqtt_plugin_cfg_get
+        # Availability configuration
+        availability_topic = 'homeassistant/alarm_control_panel/qolsys_panel/availability'
+        availability_payload_online = 'online'
+        availability_payload_offline = 'offline'
 
         # Mock app configuration
         cfg = mock.create_autospec(QolsysGatewayConfig)
@@ -291,14 +293,20 @@ class TestUnitMqttWrapperQolsys(unittest.TestCase):
         state = mock.create_autospec(QolsysState)
         wrapped_state = MqttWrapperQolsysState(
             state=state, mqtt_publish=mqtt_publish, cfg=cfg,
-            mqtt_plugin_cfg=mqtt_plugin_cfg, session_token=session_token)
+            availability_topic=availability_topic,
+            availability_payload_online=availability_payload_online,
+            availability_payload_offline=availability_payload_offline,
+            session_token=session_token)
 
         partition = mock.create_autospec(QolsysPartition)
         partition.name = 'TestPartition'
         partition.id = 42
         wrapped_partition = MqttWrapperQolsysPartition(
             partition=partition, mqtt_publish=mqtt_publish, cfg=cfg,
-            mqtt_plugin_cfg=mqtt_plugin_cfg, session_token=session_token)
+            availability_topic=availability_topic,
+            availability_payload_online=availability_payload_online,
+            availability_payload_offline=availability_payload_offline,
+            session_token=session_token)
 
         sensor = mock.create_autospec(QolsysSensor)
         sensor.name = 'TestSensor'
@@ -308,12 +316,17 @@ class TestUnitMqttWrapperQolsys(unittest.TestCase):
         sensor.unique_id = sensor.id
         wrapped_sensor = MqttWrapperQolsysSensor(
             sensor=sensor, mqtt_publish=mqtt_publish, cfg=cfg,
-            mqtt_plugin_cfg=mqtt_plugin_cfg, session_token=session_token)
+            availability_topic=availability_topic,
+            availability_payload_online=availability_payload_online,
+            availability_payload_offline=availability_payload_offline,
+            session_token=session_token)
 
         # Make those available
         self.mqtt_publish = mqtt_publish
         self.session_token = session_token
-        self.mqtt_plugin_cfg = mqtt_plugin_cfg
+        self.availability_topic = availability_topic
+        self.availability_payload_online = availability_payload_online
+        self.availability_payload_offline = availability_payload_offline
         self.cfg = cfg
 
         self.state = state
@@ -393,7 +406,9 @@ class TestUnitMqttWrapperQolsys(unittest.TestCase):
 
             wrapped_sensor = MqttWrapperQolsysSensor(
                 sensor=sensor, mqtt_publish=self.mqtt_publish, cfg=self.cfg,
-                mqtt_plugin_cfg=self.mqtt_plugin_cfg,
+                availability_topic=self.availability_topic,
+                availability_payload_online=self.availability_payload_online,
+                availability_payload_offline=self.availability_payload_offline,
                 session_token=self.session_token)
 
             actual = wrapped_sensor.ha_device_class

@@ -92,7 +92,23 @@ docker compose exec qolsysgw /app/docker-healthcheck.sh
 
 ### Test Requirements
 
-The project uses different test requirement files:
+**⚠️ TESTS TEMPORARILY DISABLED (v2.0.0)**
+
+The test suite has been temporarily disabled in GitHub Actions due to the v2.0.0 architectural rewrite from AppDaemon to standalone. The existing tests were built around AppDaemon patterns and require a complete rewrite.
+
+**Current Status**:
+- GitHub Actions test jobs are commented out (`.github/workflows/build.yaml`)
+- Linting still runs and passes via GitHub Actions
+- Core functionality validated through manual testing against real hardware
+- Some unit tests (e.g., `test_client.py`, `test_config.py`) were updated and can serve as reference
+
+**Future Work**:
+- Tests will be rebuilt from scratch for the standalone architecture
+- Focus on integration tests with real MQTT broker (testcontainers)
+- Remove all AppDaemon-specific test infrastructure
+- Build tests incrementally as features stabilize
+
+The project uses different test requirement files (for future use):
 - `tests/requirements.txt` - Core test dependencies
 - `tests/requirements-tools.txt` - Testing tools (installed by omni)
 - `tests/end-to-end/requirements.txt` - E2E test dependencies
@@ -167,10 +183,15 @@ When Home Assistant restarts, it publishes "online" to `homeassistant/status`. T
 
 ### Test Structure
 
+**⚠️ Tests currently disabled - see "Test Requirements" section above**
+
+When rebuilt, the test structure will be:
 - `tests/unit/` - Unit tests with mocked MQTT client
-- `tests/integration/` - Integration tests with mock panel
+- `tests/integration/` - Integration tests with real MQTT broker (testcontainers)
 - `tests/end-to-end/` - Full stack tests with Docker (standalone container + MQTT + mock panel)
 - `tests/mock_modules/` - Mock implementations and test utilities
+
+**Current state**: Existing tests are based on AppDaemon patterns and are not compatible with the v2.0.0 standalone architecture. They will be rewritten from scratch in future work.
 
 ### Important Configuration
 

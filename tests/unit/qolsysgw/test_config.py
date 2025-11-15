@@ -186,10 +186,8 @@ class TestUnitMqttConfig(unittest.TestCase):
         config = MqttConfig(host="mqtt.broker.local")
 
         self.assertEqual(config.port, 1883)
-        self.assertEqual(config.birth_topic, "homeassistant/status")
-        self.assertEqual(config.birth_payload, "online")
-        self.assertEqual(config.will_topic, "homeassistant/status")
-        self.assertEqual(config.will_payload, "offline")
+        self.assertIsNone(config.username)
+        self.assertIsNone(config.password)
         self.assertEqual(config.qos, 1)
         self.assertTrue(config.retain)
 
@@ -330,7 +328,7 @@ class TestUnitQolsysConfig(unittest.TestCase):
         )
 
         # Check event topic formatting
-        self.assertEqual(config.event_topic, "qolsys/my_panel/event")
+        self.assertEqual(config.event_topic, "homeassistant/my_panel/event")
 
         # Check control topic formatting
         self.assertEqual(

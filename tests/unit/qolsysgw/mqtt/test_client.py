@@ -20,10 +20,9 @@ class TestUnitMqttClient(unittest.TestCase):
             port=1883,
             username="testuser",
             password="testpass",
-            will_topic="test/will",
-            will_payload="offline",
-            birth_topic="test/birth",
-            birth_payload="online",
+            availability_topic="test/availability",
+            availability_payload_online="online",
+            availability_payload_offline="offline",
             qos=1,
             retain=True,
         )
@@ -34,10 +33,9 @@ class TestUnitMqttClient(unittest.TestCase):
         self.assertEqual(self.client.port, 1883)
         self.assertEqual(self.client.username, "testuser")
         self.assertEqual(self.client.password, "testpass")
-        self.assertEqual(self.client.will_topic, "test/will")
-        self.assertEqual(self.client.will_payload, "offline")
-        self.assertEqual(self.client.birth_topic, "test/birth")
-        self.assertEqual(self.client.birth_payload, "online")
+        self.assertEqual(self.client.availability_topic, "test/availability")
+        self.assertEqual(self.client.availability_payload_online, "online")
+        self.assertEqual(self.client.availability_payload_offline, "offline")
         self.assertEqual(self.client.qos, 1)
         self.assertEqual(self.client.retain, True)
         self.assertFalse(self.client.connected)
@@ -99,9 +97,9 @@ class TestUnitMqttClient(unittest.TestCase):
         mock_client_instance.__aenter__.assert_called_once()
         self.assertTrue(self.client.connected)
 
-        # Verify birth message was published
+        # Verify availability online message was published
         mock_client_instance.publish.assert_called_once_with(
-            "test/birth",
+            topic="test/availability",
             payload="online",
             qos=1,
             retain=True,
@@ -113,8 +111,7 @@ class TestUnitMqttClient(unittest.TestCase):
         client = MqttClient(
             host="test.mqtt.broker",
             port=1883,
-            will_topic=None,
-            birth_topic=None,
+            availability_topic=None,
         )
 
         mock_client_instance = mock.AsyncMock()
@@ -126,7 +123,7 @@ class TestUnitMqttClient(unittest.TestCase):
         call_kwargs = mock_client_class.call_args[1]
         self.assertIsNone(call_kwargs['will'])
 
-        # Verify no birth message was published
+        # Verify no availability message was published
         mock_client_instance.publish.assert_not_called()
 
     @mock.patch('apps.qolsysgw.mqtt.client.Client')
@@ -158,7 +155,7 @@ class TestUnitMqttClient(unittest.TestCase):
         await self.client.publish("test/topic", "test payload")
 
         mock_client_instance.publish.assert_called_once_with(
-            "test/topic",
+            topic="test/topic",
             payload="test payload",
             qos=1,
             retain=True,
@@ -177,7 +174,7 @@ class TestUnitMqttClient(unittest.TestCase):
         await self.client.publish("test/topic", "test payload", qos=2, retain=False)
 
         mock_client_instance.publish.assert_called_once_with(
-            "test/topic",
+            topic="test/topic",
             payload="test payload",
             qos=2,
             retain=False,
