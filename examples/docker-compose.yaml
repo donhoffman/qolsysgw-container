@@ -1,46 +1,23 @@
-# Advanced Docker Compose Example for Qolsys Gateway
+# Docker Compose Example for Qolsys Gateway
 #
 # This example includes:
-# - Custom bridge network (alternative to host networking)
-# - MQTT broker (Mosquitto) included
 # - Health checks
 # - Resource limits
 # - Logging configuration
 # - Volume mounts for optional YAML config
+#
+# Note: This assumes you have an external MQTT broker running.
+# The MQTT_HOST should point to your broker (e.g., your Home Assistant instance
+# or a dedicated MQTT broker running elsewhere).
 
 version: '3.8'
 
 services:
-  # MQTT Broker (Mosquitto)
-  mosquitto:
-    image: eclipse-mosquitto:2
-    container_name: mosquitto
-    restart: unless-stopped
-    ports:
-      - "1883:1883"  # MQTT
-      - "9001:9001"  # WebSockets (optional)
-    volumes:
-      - mosquitto-data:/mosquitto/data
-      - mosquitto-log:/mosquitto/log
-      # Optional: Mount custom mosquitto.conf
-      # - ./mosquitto.conf:/mosquitto/config/mosquitto.conf:ro
-    networks:
-      - qolsys-network
-    healthcheck:
-      test: ["CMD", "mosquitto_sub", "-t", "$$SYS/#", "-C", "1", "-i", "healthcheck", "-W", "3"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 10s
-
   # Qolsys Gateway
   qolsysgw:
     image: ghcr.io/donhoffman/qolsysgw-container:latest
     container_name: qolsysgw
     restart: unless-stopped
-    depends_on:
-      mosquitto:
-        condition: service_healthy
 
     # Environment variables (or use env_file: .env)
     environment:
@@ -49,7 +26,8 @@ services:
       QOLSYS_PANEL_TOKEN: "${QOLSYS_PANEL_TOKEN}"
 
       # Required - MQTT configuration
-      MQTT_HOST: "mosquitto"
+      # Point this to your MQTT broker (e.g., Home Assistant or dedicated broker)
+      MQTT_HOST: "${MQTT_HOST:-192.168.1.50}"
       MQTT_PORT: "${MQTT_PORT:-1883}"
       MQTT_USERNAME: "${MQTT_USERNAME:-}"
       MQTT_PASSWORD: "${MQTT_PASSWORD:-}"
@@ -78,16 +56,17 @@ services:
     # volumes:
     #   - ./qolsysgw.yaml:/app/config.yaml:ro
 
-    networks:
-      - qolsys-network
+    # Use host networking for easier access to local network devices
+    # Alternatively, use bridge networking if your MQTT broker is accessible
+    network_mode: host
 
-    # Health check
+    # Health check - verifies the gateway process is running
     healthcheck:
-      test: ["CMD", "python", "-c", "import sys; sys.exit(0)"]  # Basic Python check
-      interval: 60s
+      test: ["CMD", "/app/docker-healthcheck.sh"]
+      interval: 30s
       timeout: 10s
       retries: 3
-      start_period: 30s
+      start_period: 40s
 
     # Resource limits (optional)
     deploy:
@@ -106,22 +85,9 @@ services:
         max-size: "10m"
         max-file: "3"
 
-networks:
-  qolsys-network:
-    driver: bridge
-    ipam:
-      config:
-        - subnet: 172.28.0.0/16
-
-volumes:
-  mosquitto-data:
-  mosquitto-log:
-
 # Usage:
-#   docker compose up -d                  # Start all services
-#   docker compose logs -f qolsysgw       # View qolsysgw logs
-#   docker compose logs -f mosquitto      # View MQTT broker logs
+#   docker compose up -d                  # Start the gateway
+#   docker compose logs -f                # View logs
 #   docker compose ps                     # Check service status
-#   docker compose restart qolsysgw       # Restart gateway only
-#   docker compose down                   # Stop all services
-#   docker compose down -v                # Stop and remove volumes
+#   docker compose restart                # Restart gateway
+#   docker compose down                   # Stop service
