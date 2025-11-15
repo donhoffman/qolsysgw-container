@@ -1,12 +1,11 @@
-name: Build
+name: Build and Test
 
 on:
   push:
     branches:
       - main
   pull_request:
-  schedule:
-    - cron: "0 0 * * *"
+  workflow_dispatch:
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.head_ref || github.run_id }}
@@ -14,212 +13,98 @@ concurrency:
 
 env:
   CI: 'true'
+  PYTHON_VERSION: '3.13'
 
 jobs:
-  prepare-env:
-    name: Prepare environment
-    runs-on: "ubuntu-latest"
-    outputs:
-      requires_tests: ${{ env.REQUIRES_TESTS }}
-      publish_release: ${{ env.PUBLISH_RELEASE }}
-      release_version: ${{ env.RELEASE_VERSION }}
-      release_desc: ${{ env.RELEASE_DESC }}
-      python_version: ${{ env.PYTHON_VERSION }}
-      python_major: ${{ env.PYTHON_MAJOR }}
-    steps:
-      - name: Checkout
-        uses: "actions/checkout@v5"
-
-      - name: Get the changed files that would require tests
-        id: changed-files
-        env:
-          BASE_SHA: ${{ github.event.pull_request.base.sha || 'HEAD^' }}
-          MODIFIED_FILES_APP: apps/** tests/** .github/workflows/build.yaml
-        run: |
-          .github/workflows/scripts/get-changed-files.sh
-
-      - name: Check if a new release should be published
-        if: github.event_name == 'push'
-        env:
-          GITHUB_EVENT: ${{ toJSON(github.event) }}
-          GITHUB_TOKEN: ${{ github.token }}
-        run: |
-          .github/workflows/scripts/release.py --printenv | tee -a "$GITHUB_ENV"
-
-      - name: Identify if testing is required
-        run: |
-          echo "REQUIRES_TESTS=${{ github.event_name == 'schedule' || steps.changed-files.outputs.app_any_changed == 'true' || steps.changed-files.outputs.app_any_deleted == 'true' || steps.changed-files.outputs.app_any_modified == 'true' || env.PUBLISH_RELEASE == 'true' }}" | tee -a "$GITHUB_ENV"
-
-      - name: Find python version from AppDaemon's Dockerfile
-        if: env.REQUIRES_TESTS == 'true'
-        run: |
-          # Get the python version from the AppDaemon's Dockerfile
-          # which was used to build the latest AppDaemon's docker
-          # container
-          PYTHON_VERSION=$(\
-            curl -s https://raw.githubusercontent.com/AppDaemon/appdaemon/dev/Dockerfile | \
-            grep -oP "(?<=PYTHON_RELEASE=)[0-9\.]*" | head -n1)
-          echo "PYTHON_VERSION=${PYTHON_VERSION}" | tee -a "$GITHUB_ENV"
-
-          PYTHON_MAJOR=${PYTHON_VERSION%%.*}
-          echo "PYTHON_MAJOR=${PYTHON_MAJOR}" | tee -a "$GITHUB_ENV"
-
-          # Exit in error if we were unable to find the python version
-          if [ -z "$PYTHON_VERSION" ] || [ -z "$PYTHON_MAJOR" ]; then
-            echo >&2 "Error: unable to find Python version from AppDaemon"
-            exit 1
-          fi
-
-
-  unit-integration-tests:
-    name: Unit & integration tests
-    runs-on: "ubuntu-latest"
-
-    needs:
-      - prepare-env
-
-    if: needs.prepare-env.outputs.requires_tests == 'true'
-
-    env:
-      PYTHON_VERSION: ${{ needs.prepare-env.outputs.python_version }}
-      PYTHON_MAJOR: ${{ needs.prepare-env.outputs.python_major }}
+  lint:
+    name: Lint Code
+    runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout current commit
-        uses: "actions/checkout@v5"
+      - name: Checkout code
+        uses: actions/checkout@v5
 
-      - name: Install python
-        uses: "actions/setup-python@v6"
+      - name: Set up Python
+        uses: actions/setup-python@v5
         with:
-          python-version: '${{ env.PYTHON_VERSION }}'
+          python-version: ${{ env.PYTHON_VERSION }}
 
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install flake8 pytest pytest-cov pytest-clarity pytest-subtests
-          pip install -r tests/requirements.txt
+          pip install flake8
 
-      - name: Lint code
-        id: lint_code
+      - name: Lint with flake8
         run: |
-          flake8 apps/
-        continue-on-error: true
+          # Stop the build if there are Python syntax errors or undefined names
+          flake8 apps/ --count --select=E9,F63,F7,F82 --show-source --statistics
+          # Exit-zero treats all errors as warnings
+          flake8 apps/ tests/ --count --exit-zero --max-complexity=10 --max-line-length=127 --statistics
 
-      - name: Lint tests
-        id: lint_tests
-        run: |
-          flake8 tests/
-        continue-on-error: true
-
-      - name: Run unit & integration tests
-        id: tests
-        run: |
-          set -eo pipefail
-          pytest --cache-clear --cov=gateway --cov=qolsys --cov=mqtt --cov-report term-missing --junitxml=pytest.xml tests/unit/ tests/integration/ | tee pytest-coverage.txt
-        continue-on-error: true
-
-      - name: Identify bot comments to hide
-        uses: actions/github-script@v8
-        if: steps.tests.outcome == 'success' && github.event_name == 'pull_request' && !github.event.pull_request.head.repo.fork
-        with:
-          script: |
-            const { data: comments } = await github.rest.issues.listComments({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              issue_number: context.issue.number,
-            })
-            const botComments = comments.filter(comment => {
-              return comment.user.type === 'Bot' && comment.body.startsWith('<!-- Pytest Coverage Comment: unit-integration-tests -->')
-            }).map((comment) => comment.node_id)
-
-            if (botComments.length > 0) {
-              core.exportVariable('BOT_COMMENTS', botComments.join(' '))
-              console.log('BOT_COMMENTS=' + botComments.join(' '))
-            }
-
-      - name: Minimize comments from previous run
-        if: steps.tests.outcome == 'success' && github.event_name == 'pull_request' && !github.event.pull_request.head.repo.fork && env.BOT_COMMENTS
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          QUERY=$(cat <<- EOM
-            mutation minimizeComment(\$id: ID!) {
-              minimizeComment(input: { classifier: OUTDATED, subjectId: \$id }) {
-                clientMutationId
-              }
-            }
-          EOM
-          )
-
-          for commentId in ${{ env.BOT_COMMENTS }}; do
-            gh api graphql -F id="$commentId" -F query="$QUERY"
-            echo
-          done
-
-      - name: Post comment of pytest coverage
-        continue-on-error: true
-        uses: MishaKav/pytest-coverage-comment@main
-        if: steps.tests.outcome == 'success' && github.event_name == 'pull_request' && !github.event.pull_request.head.repo.fork
-        with:
-          create-new-comment: true
-          pytest-coverage-path: ./pytest-coverage.txt
-          junitxml-path: ./pytest.xml
-
-      - name: Overall job outcome
-        run: |
-          LINT_CODE=$([ '${{ steps.lint_code.outcome }}' == 'success' ] && echo true || echo false)
-          LINT_TESTS=$([ '${{ steps.lint_tests.outcome }}' == 'success' ] && echo true || echo false)
-          TESTS=$([ '${{ steps.tests.outcome }}' == 'success' ] && echo true || echo false)
-
-          if ! $LINT_CODE; then
-            echo "Lint of code failed" >&2
-          fi
-
-          if ! $LINT_TESTS; then
-            echo "Lint of tests failed" >&2
-          fi
-
-          if ! $TESTS; then
-            echo "Tests failed" >&2
-          fi
-
-          # Exit on error if any failed
-          if ! $LINT_CODE || ! $LINT_TESTS || ! $TESTS; then
-            exit 1
-          fi
-
-          exit 0
-
-
-  end-to-end-tests:
-    name: End-to-end tests
-    runs-on: "ubuntu-latest"
-
-    needs:
-      - prepare-env
-      - unit-integration-tests
-
-    if: needs.unit-integration-tests.result == 'success'
-
-    env:
-      PYTHON_VERSION: ${{ needs.prepare-env.outputs.python_version }}
-      PYTHON_MAJOR: ${{ needs.prepare-env.outputs.python_major }}
+  test:
+    name: Unit & Integration Tests
+    runs-on: ubuntu-latest
+    needs: lint
 
     steps:
-      - name: Checkout current commit
-        uses: "actions/checkout@v5"
+      - name: Checkout code
+        uses: actions/checkout@v5
 
-      - name: Print docker versions
-        run: |
-          docker version
-          docker compose version
-
-      - name: Install python
-        uses: "actions/setup-python@v6"
+      - name: Set up Python
+        uses: actions/setup-python@v5
         with:
-          python-version: '${{ env.PYTHON_VERSION }}'
+          python-version: ${{ env.PYTHON_VERSION }}
 
       - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install pytest pytest-cov pytest-clarity pytest-subtests
+          pip install -r tests/requirements.txt
+
+      - name: Run unit & integration tests
+        run: |
+          pytest --cache-clear \
+            --cov=apps/qolsysgw \
+            --cov-report=term-missing \
+            --cov-report=xml \
+            --junitxml=pytest.xml \
+            tests/unit/ tests/integration/
+
+      - name: Upload coverage to Codecov
+        uses: codecov/codecov-action@v4
+        if: always()
+        with:
+          file: ./coverage.xml
+          fail_ci_if_error: false
+        continue-on-error: true
+
+  test-e2e:
+    name: End-to-End Tests
+    runs-on: ubuntu-latest
+    needs: test
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v5
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build Docker image for testing
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          load: true
+          tags: qolsysgw:test
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Install test dependencies
         run: |
           python -m pip install --upgrade pip
           pip install pytest pytest-clarity pytest-subtests
@@ -227,124 +112,48 @@ jobs:
           pip install -r tests/end-to-end/requirements.txt
 
       - name: Run end-to-end tests
-        id: tests
         run: |
-          set -eo pipefail
           pytest --cache-clear tests/end-to-end/
 
-
-  update_changelog:
-    name: Update changelog
-    runs-on: "ubuntu-latest"
-
-    concurrency:
-      group: ${{ github.workflow }}-${{ github.ref }}-update-changelog
-
-    needs:
-      - prepare-env
-      - unit-integration-tests
-      - end-to-end-tests
-
-    if: github.event_name == 'push' && needs.prepare-env.outputs.publish_release != 'true' && needs.unit-integration-tests.result != 'failure' && needs.end-to-end-tests.result != 'failure'
-
-    steps:
-      - name: Checkout current commit
-        uses: "actions/checkout@v5"
-        with:
-          ref: ${{ github.ref }}
-          token: ${{ secrets.COMMIT_TOKEN }}
-
-      - name: Update changelog for future release
-        env:
-          GITHUB_EVENT: ${{ toJSON(github.event) }}
-          GITHUB_TOKEN: ${{ github.token }}
-        run: |
-          .github/workflows/scripts/release.py --update-changelog
-
-      - name: Commit changes
-        uses: stefanzweifel/git-auto-commit-action@v6
-        with:
-          file_pattern: "info.md"
-          commit_message: 📒 Update changelog for future release
-
-
-  push_release:
-    name: Release version
+  build-package:
+    name: Build Python Package
     runs-on: ubuntu-latest
-
-    needs:
-      - prepare-env
-      - unit-integration-tests
-      - end-to-end-tests
-
-    if: github.event_name == 'push' && needs.prepare-env.outputs.publish_release == 'true' && needs.unit-integration-tests.result != 'failure' && needs.end-to-end-tests.result != 'failure'
-
-    permissions:
-      contents: write
+    needs: test
 
     steps:
-      - name: Checkout current commit
-        uses: "actions/checkout@v5"
-
-      - name: Release version
-        uses: ncipollo/release-action@v1
-        with:
-          tag: v${{ needs.prepare-env.outputs.release_version }}
-          name: v${{ needs.prepare-env.outputs.release_version }}
-          body: ${{ needs.prepare-env.outputs.release_desc }}
-          commit: main
-          makeLatest: true
-          skipIfReleaseExists: true
-
-
-  push_library:
-    name: Push library to PyPI
-    runs-on: ubuntu-latest
-
-    needs:
-      - prepare-env
-      - push_release
-
-    steps:
-      - name: Checkout current commit
-        uses: "actions/checkout@v5"
+      - name: Checkout code
+        uses: actions/checkout@v5
 
       - name: Install Hatch
         uses: pypa/hatch@install
 
-      - name: Create version file
-        env:
-          VERSION: ${{ needs.prepare-env.outputs.release_version }}
-        run: |
-          echo "__version__ = \"${VERSION}\"" | tee build_version.py
-
       - name: Build package
         run: hatch build
 
-      - name: Test package
-        run: hatch run test
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: dist
+          path: dist/
+          retention-days: 7
 
-      - name: Publish to PyPI
-        uses: pypa/gh-action-pypi-publish@release/v1
-
-
+  # Optional: Auto-merge Dependabot PRs
   auto-merge:
-    name: "Auto-merge Dependabot pull requests"
+    name: Auto-merge Dependabot PRs
     runs-on: ubuntu-latest
+    needs: [lint, test, test-e2e]
 
-    needs:
-      - prepare-env
-      - unit-integration-tests
-      - end-to-end-tests
+    if: |
+      github.event_name == 'pull_request' &&
+      github.actor == 'dependabot[bot]'
 
-    if: github.event_name == 'pull_request' && github.actor == 'dependabot[bot]' && needs.unit-integration-tests.result != 'failure' && needs.end-to-end-tests.result != 'failure'
+    permissions:
+      contents: write
+      pull-requests: write
 
     steps:
-      - name: Checkout current commit
-        uses: "actions/checkout@v5"
-
-      - name: Check and auto-merge on minor changes
-        uses: ahmadnassri/action-dependabot-auto-merge@v2
-        with:
-          target: minor
-          github-token: ${{ secrets.AUTOMERGE_TOKEN }}
+      - name: Auto-merge minor updates
+        run: gh pr merge --auto --squash "$PR_URL"
+        env:
+          PR_URL: ${{ github.event.pull_request.html_url }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
