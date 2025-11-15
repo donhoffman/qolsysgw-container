@@ -1,0 +1,127 @@
+# Advanced Docker Compose Example for Qolsys Gateway
+#
+# This example includes:
+# - Custom bridge network (alternative to host networking)
+# - MQTT broker (Mosquitto) included
+# - Health checks
+# - Resource limits
+# - Logging configuration
+# - Volume mounts for optional YAML config
+
+version: '3.8'
+
+services:
+  # MQTT Broker (Mosquitto)
+  mosquitto:
+    image: eclipse-mosquitto:2
+    container_name: mosquitto
+    restart: unless-stopped
+    ports:
+      - "1883:1883"  # MQTT
+      - "9001:9001"  # WebSockets (optional)
+    volumes:
+      - mosquitto-data:/mosquitto/data
+      - mosquitto-log:/mosquitto/log
+      # Optional: Mount custom mosquitto.conf
+      # - ./mosquitto.conf:/mosquitto/config/mosquitto.conf:ro
+    networks:
+      - qolsys-network
+    healthcheck:
+      test: ["CMD", "mosquitto_sub", "-t", "$$SYS/#", "-C", "1", "-i", "healthcheck", "-W", "3"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+
+  # Qolsys Gateway
+  qolsysgw:
+    image: ghcr.io/donhoffman/qolsysgw-container:latest
+    container_name: qolsysgw
+    restart: unless-stopped
+    depends_on:
+      mosquitto:
+        condition: service_healthy
+
+    # Environment variables (or use env_file: .env)
+    environment:
+      # Required - Panel configuration
+      QOLSYS_PANEL_HOST: "${QOLSYS_PANEL_HOST:-192.168.1.100}"
+      QOLSYS_PANEL_TOKEN: "${QOLSYS_PANEL_TOKEN}"
+
+      # Required - MQTT configuration
+      MQTT_HOST: "mosquitto"
+      MQTT_PORT: "${MQTT_PORT:-1883}"
+      MQTT_USERNAME: "${MQTT_USERNAME:-}"
+      MQTT_PASSWORD: "${MQTT_PASSWORD:-}"
+
+      # Optional - Panel settings
+      QOLSYS_PANEL_USER_CODE: "${QOLSYS_PANEL_USER_CODE:-}"
+      QOLSYS_PANEL_UNIQUE_ID: "${QOLSYS_PANEL_UNIQUE_ID:-qolsys_panel}"
+      QOLSYS_PANEL_DEVICE_NAME: "${QOLSYS_PANEL_DEVICE_NAME:-Qolsys Panel}"
+
+      # Optional - Arming configuration
+      QOLSYS_ARM_AWAY_EXIT_DELAY: "${QOLSYS_ARM_AWAY_EXIT_DELAY:-}"
+      QOLSYS_ARM_STAY_EXIT_DELAY: "${QOLSYS_ARM_STAY_EXIT_DELAY:-}"
+      QOLSYS_ARM_AWAY_BYPASS: "${QOLSYS_ARM_AWAY_BYPASS:-}"
+      QOLSYS_ARM_STAY_BYPASS: "${QOLSYS_ARM_STAY_BYPASS:-}"
+
+      # Optional - Home Assistant configuration
+      HA_DISCOVERY_PREFIX: "${HA_DISCOVERY_PREFIX:-homeassistant}"
+      HA_CHECK_USER_CODE: "${HA_CHECK_USER_CODE:-true}"
+      HA_CODE_ARM_REQUIRED: "${HA_CODE_ARM_REQUIRED:-false}"
+      HA_CODE_DISARM_REQUIRED: "${HA_CODE_DISARM_REQUIRED:-false}"
+
+      # Optional - Logging
+      LOG_LEVEL: "${LOG_LEVEL:-INFO}"
+
+    # Optional: Mount YAML config file
+    # volumes:
+    #   - ./qolsysgw.yaml:/app/config.yaml:ro
+
+    networks:
+      - qolsys-network
+
+    # Health check
+    healthcheck:
+      test: ["CMD", "python", "-c", "import sys; sys.exit(0)"]  # Basic Python check
+      interval: 60s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+
+    # Resource limits (optional)
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 256M
+        reservations:
+          cpus: '0.1'
+          memory: 128M
+
+    # Logging configuration
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+networks:
+  qolsys-network:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.28.0.0/16
+
+volumes:
+  mosquitto-data:
+  mosquitto-log:
+
+# Usage:
+#   docker compose up -d                  # Start all services
+#   docker compose logs -f qolsysgw       # View qolsysgw logs
+#   docker compose logs -f mosquitto      # View MQTT broker logs
+#   docker compose ps                     # Check service status
+#   docker compose restart qolsysgw       # Restart gateway only
+#   docker compose down                   # Stop all services
+#   docker compose down -v                # Stop and remove volumes

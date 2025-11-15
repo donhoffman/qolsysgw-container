@@ -436,7 +436,7 @@ pyyaml>=6.0  # Optional YAML config file support
 - [x] Test: Trigger sensor on panel → verify HA updates
 - [x] Test: Change partition state on panel → verify HA updates
 - [x] Test: Disconnect MQTT → verify auto-reconnect
-- [x] Test: HA restart detection → verify entities reconfigure
+- [x] Test: yeHA restart detection → verify entities reconfigure
 - [x] Test: Graceful shutdown with Ctrl+C
 - [x] Run test suite: `pytest`
 - [x] Run linter: `flake8`
@@ -491,26 +491,28 @@ pyyaml>=6.0  # Optional YAML config file support
 **Note**: E2E test suite with Docker Compose deferred to after Phase 4 CI/CD setup.
 
 ### Phase 5: Documentation
-- [ ] Update `README.md`
-  - [ ] Remove AppDaemon references
-  - [ ] Add standalone container installation
-  - [ ] Add docker-compose example
-  - [ ] Document environment variables
-  - [ ] Update prerequisites
-  - [ ] Add troubleshooting section
-- [ ] Update `CLAUDE.md`
-  - [ ] Update architecture description
-  - [ ] Remove AppDaemon references
-  - [ ] Add new entry point documentation
-  - [ ] Update build/run commands
-  - [ ] Document new testing approach
-- [ ] Create `examples/config.yaml.example` (optional YAML config)
-- [ ] Create `examples/docker-compose.yaml` (advanced example)
-- [ ] Create `examples/docker-compose-simple.yaml` (simple example)
-- [ ] Document all environment variables in README
-- [ ] Add upgrade notes in README
+- [x] Update `README.md`
+  - [x] Remove AppDaemon references
+  - [x] Add standalone container installation
+  - [x] Add docker-compose example
+  - [x] Document environment variables
+  - [x] Update prerequisites
+  - [x] Add troubleshooting section
+- [x] Update `CLAUDE.md`
+  - [x] Update architecture description
+  - [x] Remove AppDaemon references
+  - [x] Add new entry point documentation
+  - [x] Update build/run commands
+  - [x] Document new testing approach
+- [x] Create `examples/config.yaml.example` (optional YAML config)
+- [x] Create `examples/docker-compose.yaml` (advanced example)
+- [x] Create `examples/docker-compose-simple.yaml` (simple example)
+- [x] Document all environment variables in README
+- [x] Add upgrade notes in README
 
 **Deliverable**: Complete documentation for v2.0.0.
+
+**Phase 5 Complete** ✅
 
 ### Phase 6: Release
 - [ ] Update version to 2.0.0 in `pyproject.toml`

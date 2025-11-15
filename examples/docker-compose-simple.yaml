@@ -1,0 +1,40 @@
+# Simple Docker Compose Example for Qolsys Gateway
+#
+# This is a minimal configuration to get started quickly.
+# Copy this file to your project directory as docker-compose.yml
+# and create a .env file with your configuration.
+
+version: '3.8'
+
+services:
+  qolsysgw:
+    image: ghcr.io/donhoffman/qolsysgw-container:latest
+    container_name: qolsysgw
+    network_mode: host  # Recommended for easy panel/MQTT discovery
+    restart: unless-stopped
+
+    # Load configuration from .env file
+    env_file: .env
+
+    # Or specify environment variables directly:
+    # environment:
+    #   # Required
+    #   QOLSYS_PANEL_HOST: "192.168.1.100"
+    #   QOLSYS_PANEL_TOKEN: "your_secure_token_here"
+    #   MQTT_HOST: "mosquitto"
+    #
+    #   # Optional - MQTT authentication
+    #   MQTT_USERNAME: "qolsysgw"
+    #   MQTT_PASSWORD: "your_mqtt_password"
+    #
+    #   # Optional - Panel user code (recommended)
+    #   QOLSYS_PANEL_USER_CODE: "123456"
+    #
+    #   # Optional - Logging
+    #   LOG_LEVEL: "INFO"
+
+# Usage:
+#   docker compose up -d        # Start container
+#   docker compose logs -f      # View logs
+#   docker compose restart      # Restart container
+#   docker compose down         # Stop and remove container

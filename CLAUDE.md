@@ -97,8 +97,6 @@ The project uses different test requirement files:
 - `tests/requirements-tools.txt` - Testing tools (installed by omni)
 - `tests/end-to-end/requirements.txt` - E2E test dependencies
 
-Python version is automatically matched to AppDaemon's latest Docker image in CI.
-
 ## Code Architecture
 
 ### High-Level Structure
@@ -107,7 +105,7 @@ The codebase has three main subsystems:
 
 1. **Qolsys Panel Interface (`apps/qolsysgw/qolsys/`)** - Manages communication with the Qolsys alarm panel
 2. **MQTT Interface (`apps/qolsysgw/mqtt/`)** - Handles MQTT messaging and Home Assistant MQTT discovery
-3. **Gateway Orchestration (`apps/qolsysgw/gateway.py`)** - Main AppDaemon app that ties everything together
+3. **Gateway Orchestration (`apps/qolsysgw/gateway.py`)** - Main application that orchestrates the gateway
 
 ### Main Components
 

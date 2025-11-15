@@ -1,246 +1,186 @@
 # Qolsys Gateway - `qolsysgw`
 
-![build](https://github.com/XaF/qolsysgw/actions/workflows/build.yaml/badge.svg)
-![hacs validation](https://github.com/XaF/qolsysgw/actions/workflows/hacs-validation.yaml/badge.svg)
-[![latest release](https://img.shields.io/github/v/release/XaF/qolsysgw?logo=github&sort=semver)](https://github.com/XaF/qolsysgw/releases)
+![build](https://github.com/donhoffman/qolsysgw-container/actions/workflows/build.yaml/badge.svg)
+[![container build](https://github.com/donhoffman/qolsysgw-container/actions/workflows/container-build.yaml/badge.svg)](https://github.com/donhoffman/qolsysgw-container/pkgs/container/qolsysgw-container)
+[![latest release](https://img.shields.io/github/v/release/donhoffman/qolsysgw-container?logo=github&sort=semver)](https://github.com/donhoffman/qolsysgw-container/releases)
 
-Qolsys Gateway (`qolsysgw`) is an [AppDaemon][appdaemon]
-automation that serves as a gateway between a Qolsys IQ Panel
-([2][qolsys-panel-2], [2+][qolsys-panel-2-plus] or [4][qolsys-panel-4])
-and [Home Assistant][hass]. Qolsys Gateway works by establishing a connection
-to your Qolsys Panel and uses the [MQTT integration of Home Assistant][hass-mqtt].
-It takes advantages of the [MQTT discovery][hass-mqtt-discovery]
-feature (automatically enabled when you setup the integration) to declare the
-device, alarm control panels (for each partition) and different sensors, and
-keep them up to date with the information coming from the panel, while
-providing you with the means to arm, disarm or trigger your alarm directly
-from Home Assistant, manually or through automations.
+Qolsys Gateway (`qolsysgw`) is a Python application that serves as a gateway between a Qolsys IQ Panel ([2][qolsys-panel-2], [2+][qolsys-panel-2-plus] or [4][qolsys-panel-4]) and [Home Assistant][hass].
 
+**Key Features:**
+- 🐳 **Standalone Docker container** - runs alongside your Home Assistant installation
+- 🔄 **Automatic MQTT discovery** - sensors and partitions appear automatically in Home Assistant
+- 🔐 **Secure communication** - encrypted connection to your Qolsys panel
+- 🎯 **Full control** - arm, disarm, and trigger your alarm from Home Assistant
+- 📡 **Real-time updates** - instant state synchronization between panel and Home Assistant
+- 🏗️ **Multi-architecture support** - runs on amd64 and arm64 (Raspberry Pi compatible)
+
+Qolsys Gateway connects to your Qolsys Panel using the Control4 protocol and publishes all partitions, sensors, and state changes to [Home Assistant via MQTT][hass-mqtt]. It leverages [MQTT discovery][hass-mqtt-discovery] to automatically create entities in Home Assistant, while providing full bidirectional control for arming, disarming, and triggering your alarm system.
+
+## About This Fork
+
+This project is a fork of the original [qolsysgw by XaF](https://github.com/XaF/qolsysgw), redesigned to run as a standalone Docker container. While the original project integrates with AppDaemon for users who prefer that ecosystem, this fork takes a different approach:
+
+- **Standalone architecture** - runs as an independent container without external dependencies
+- **Native async Python** - built on modern Python 3.13+ with native asyncio
+- **Container-first design** - optimized for Docker and container orchestration
+- **Simplified deployment** - configure via environment variables, deploy with Docker Compose
+
+Both projects share the same goal of integrating Qolsys panels with Home Assistant, but serve different deployment preferences.
+
+
+## Table of Contents
 
 - [How It Works](#how-it-works)
 - [Requirements](#requirements)
+- [Quick Start](#quick-start)
 - [Installation](#installation)
-   - [Installing Home Assistant](#installing-home-assistant)
-   - [Installing an MQTT Broker](#installing-an-mqtt-broker)
-   - [Installing AppDaemon](#installing-appdaemon)
-   - [Installing HACS (optional, recommended)](#installing-hacs-optional-recommended)
-   - [Installing Qolsys Gateway](#installing-qolsys-gateway)
-      - [With HACS (recommended)](#with-hacs-recommended)
-      - [Manually](#manually)
+  - [Pull from GitHub Container Registry](#pull-from-github-container-registry)
+  - [Using Docker Compose](#using-docker-compose)
+  - [Using Docker Run](#using-docker-run)
 - [Configuration](#configuration)
-   - [Configuring the MQTT integration in Home Assistant](#configuring-the-mqtt-integration-in-home-assistant)
-   - [Configuring your Qolsys IQ Panel](#configuring-your-qolsys-iq-panel)
-   - [Configuring Qolsys Gateway](#configuring-qolsys-gateway)
-      - [Required configuration](#required-configuration)
-      - [Optional configuration related to the Qolsys Panel itself](#optional-configuration-related-to-the-qolsys-panel-itself)
-      - [Optional configuration related to the representation of the panel in Home Assistant](#optional-configuration-related-to-the-representation-of-the-panel-in-home-assistant)
-      - [Optional configuration related to MQTT & AppDaemon](#optional-configuration-related-to-mqtt--appdaemon)
-- [Other documentation](#other-documentation)
-- [Acknowledgements and thanks](#acknowledgements-and-thanks)
+  - [Configuring your Qolsys IQ Panel](#configuring-your-qolsys-iq-panel)
+  - [Required Environment Variables](#required-environment-variables)
+  - [Optional Environment Variables](#optional-environment-variables)
+    - [Panel Configuration](#panel-configuration)
+    - [Home Assistant Configuration](#home-assistant-configuration)
+    - [MQTT Configuration](#mqtt-configuration)
+- [Troubleshooting](#troubleshooting)
+- [Other Documentation](#other-documentation)
+- [Acknowledgements and Thanks](#acknowledgements-and-thanks)
 
 
 ## How It Works
 
-Qolsys Gateway is an [async application][asyncio] and has a few parallel
-workflows:
+Qolsys Gateway is an [async Python application][asyncio] that runs three concurrent workflows:
 
-1. The communication with the Qolsys Panel
+### 1. Panel Communication
+- Connects to your Qolsys Panel via the Control4 protocol (SSL/TLS)
+- Requests initial state (partitions, sensors, status) on connection
+- Listens for real-time events from the panel (sensor triggers, state changes, etc.)
+- Sends keep-alive messages every 4 minutes to maintain the connection
+- Automatically reconnects if the connection is lost
 
-   1. Qolsys Gateway connects to your Qolsys Panel using the configured
-      information (hostname, token, port), thanks to a Control4 interface
+### 2. MQTT Publishing
+- Publishes panel events and state changes to MQTT topics
+- Uses Home Assistant's MQTT discovery to automatically create entities
+- Updates sensor states, partition status, and device information in real-time
+- Publishes availability status (online/offline) with Last Will and Testament (LWT)
 
-   2. As soon as the connection is established, Qolsys Gateway requests
-      from the panel the information on the current state of the panel,
-      its partitions and sensors
-
-   3. Qolsys Gateway listens for messages from the panel, and calls a
-      callback method everytime a message can be parsed to an executable
-      action; the callback will push that message in an MQTT thread _(that
-      step is not mandatory but doing that loop allows to debug the
-      application from Home Assistant by sending events directly in MQTT)_
-
-   4. Every 4 minutes, a keep-alive message is sent to the connection,
-      in order to avoid the panel from disconnecting Qolsys Gateway
-
-2. The communications with MQTT
-
-   1. Qolsys Gateway listens to an `event` topic, when a message is received,
-      we update the state of the panel according to the event (it can be
-      updating the sensors, the partitions or the panel itself). Messages in
-      that topic are the messages that come from the Qolsys Panel, and that
-      we intepret as change to the state of the panel. In general, with the
-      update, we will trigger a few MQTT messages to be sent to update the
-      status of the element at the source of the event in Home Assistant.
-
-   2. Qolsys Gateway also listens to a `control` topic, when a message is
-      received, we communicate the action to perform to the Qolsys Panel.
-      Messages in that topic are coming from Home Assistant as reactions
-      to service calls on the `alarm_control_panel` entities, or of manually
-      configured actions. They can be used to arm or disarm the system,
-      or even to trigger the alarm on the device.
+### 3. MQTT Control Listener
+- Subscribes to control topics for commands from Home Assistant
+- Processes arm/disarm/trigger commands from `alarm_control_panel` entities
+- Validates user codes and session tokens for security
+- Sends validated commands to the Qolsys Panel
+- Detects Home Assistant restarts and republishes entity configurations
 
 
 ## Requirements
 
-- A Qolsys IQ Panel 2 or 2+ (software version 2.5.3 or greater), or 4
-  (software version 4.1 or greater),
-  for which you have the **dealer code** (defaults to `2222`). In some cases,
-  the _installer code_ (defaults to `1111`) might be sufficient, but in my
-  experience, it was not, as the required menus were not visible.
+- **Qolsys IQ Panel**: Panel 2 or 2+ (software version 2.5.3 or greater), or Panel 4 (software version 4.1 or greater). You must have the **dealer code** (defaults to `2222`) to enable the Control4 interface. In some cases, the _installer code_ (defaults to `1111`) might be sufficient, but the required menus may not be visible.
 
-- Understanding that this automation is not part of the core of Home Assistant
-  and is thus not officially supported by Home Assistant. By using it, you
-  agree that neither Home Assistant nor myself are responsible for any issues
-  with your Home Assistant configuration, loss of data, or whatever could be
-  caused by using Qolsys Gateway. Setting up Qolsys Gateway requires enabling
-  the Control4 protocol on your Qolsys Panel, which may open to security issues
-  and someone taking over control of your alarm system, so please be aware of
-  what you are doing, and only do it if you are ready to take those risks.
+- **MQTT Broker**: A working MQTT broker (e.g., Mosquitto) accessible from both Home Assistant and the Qolsys Gateway container.
+
+- **Docker**: Docker and Docker Compose for running the containerized application.
+
+- **Home Assistant**: With the MQTT integration configured.
+
+- **Network Access**: The Qolsys Gateway container must be able to reach both your Qolsys Panel and MQTT broker on your network.
+
+**Security Notice**: This application is not part of the core of Home Assistant and is not officially supported. Setting up Qolsys Gateway requires enabling the Control4 protocol on your Qolsys Panel, which involves network-accessible communication with your alarm system. Ensure you understand the security implications and take appropriate precautions (firewall rules, network segmentation, etc.). Use at your own risk.
+
+
+## Quick Start
+
+Get up and running quickly with Docker Compose:
+
+```yaml
+version: '3.8'
+
+services:
+  qolsysgw:
+    image: ghcr.io/donhoffman/qolsysgw-container:latest
+    container_name: qolsysgw
+    network_mode: host
+    restart: unless-stopped
+    environment:
+      # Required: Panel connection
+      QOLSYS_PANEL_HOST: "192.168.1.100"  # Your panel's IP address
+      QOLSYS_PANEL_TOKEN: "your_secure_token_here"
+
+      # Required: MQTT connection
+      MQTT_HOST: "mosquitto"  # Your MQTT broker hostname
+
+      # Optional: MQTT authentication (recommended)
+      MQTT_USERNAME: "qolsysgw"
+      MQTT_PASSWORD: "your_mqtt_password"
+
+      # Optional: Panel user code (for disarming without entering code in HA)
+      QOLSYS_PANEL_USER_CODE: "123456"
+```
+
+See [Configuration](#configuration) below for all available options.
 
 
 ## Installation
 
-Installing Qolsys Gateway requires the following steps.
+Qolsys Gateway is distributed as a Docker container via GitHub Container Registry (GHCR).
 
+### Pull from GitHub Container Registry
 
-### Installing Home Assistant
-
-You can get to the [Home Assistant documentation for installation][hass-install]
-page in order to setup Home Assistant for your needs.
-
-
-### Installing an MQTT Broker
-
-You will require a working MQTT broker alongside your Home Assistant
-installation. Home Assistant provides [documentation on how to install
-and configure an MQTT broker][hass-mqtt-broker].
-If you wish to use MQTT through a docker deployment, you can use the
-[`eclipse-mosquitto` docker image][mqtt-docker].
-If you can, setup a username and password to secure your broker even more.
-
-
-### Installing AppDaemon
-
-Qolsys Gateway is an AppDaemon automation, which means it depends on a
-working and running version of AppDaemon, connected to your Home Assistant.
-You can find all the resources necessary in AppDaemon's documentation about
-how to [install AppDaemon][appdaemon-install] and how to
-[configure it with the HASS plugin][appdaemon-hass-plugin] for communicating
-with Home Assistant, and [with the MQTT plugin][appdaemon-mqtt-plugin]
-for communicating with your MQTT broker.
-
-If you wish to use AppDaemon through a docker deployment, you can use the
-[`acockburn/appdaemon` docker image][appdaemon-docker].
-
-<details><summary>See an example of <code>appdaemon.yaml</code></summary>
-
-```yaml
-appdaemon:
-  time_zone: "America/New_York" # Adapt this to your actual timezone
-
-  # All three of those might be already filled for you, or you set the
-  # values here, or use the secrets.yaml file to setup the values
-  latitude: !secret latitude
-  longitude: !secret longitude
-  elevation: !secret elevation
-
-  plugins:
-    # If using the add-on in Home Assistant, that plugin will already be
-    # enabled; when using the docker container, you will have to add it here
-    HASS:
-      type: hass
-      ha_url: "http://homeassistant:8123"
-      token: !secret ha_token # The token you get from home assistant
-
-    # And we need to add the MQTT plugin
-    MQTT:
-      type: mqtt
-      namespace: mqtt # We will need that same value in the apps.yaml configuration
-      client_host: mosquitto # The IP address or hostname of the MQTT broker
-      client_port: 1883 # The port of the MQTT broker, generally 1883
-
-      # Only if you have setup an authenticated connection, otherwise skip those:
-      client_user: appdaemon # The username
-      client_password: !secret mqtt_password # The password
+```bash
+docker pull ghcr.io/donhoffman/qolsysgw-container:latest
 ```
-</details>
 
+**Available tags:**
+- `latest` - Latest stable release
+- `2.0.0` - Specific version
+- `2.0` - Latest 2.0.x release
+- `2` - Latest 2.x release
 
-### Installing HACS (optional, recommended)
+### Using Docker Compose
 
-HACS is the Home Assistant Community Store and allows for community integrations and
-automations to be updated cleanly and easily from the Home Assistant web user interface.
-If it is simple to install Qolsys Gateway without HACS, keeping up to date requires
-manual steps that HACS will handle for you: you will be notified of updates, and they
-can be installed by a click on a button.
+Create a `docker-compose.yml` file (see [Quick Start](#quick-start) above for a complete example) and run:
 
-If you want to use HACS, you will have to follow [their documentation on how to install HACS][hacs-install].
+```bash
+docker compose up -d
+```
 
+**View logs:**
+```bash
+docker compose logs -f qolsysgw
+```
 
-### Installing Qolsys Gateway
+**Stop the container:**
+```bash
+docker compose down
+```
 
-Installing Qolsys Gateway is pretty simple once all the applications above
-are setup. You can either follow the path using HACS (a bit more steps initially,
-easier on the longer run) or use the manual setup approach.
+### Using Docker Run
 
-#### With HACS (recommended)
+```bash
+docker run -d \
+  --name qolsysgw \
+  --network host \
+  --restart unless-stopped \
+  -e QOLSYS_PANEL_HOST="192.168.1.100" \
+  -e QOLSYS_PANEL_TOKEN="your_secure_token_here" \
+  -e MQTT_HOST="mosquitto" \
+  -e MQTT_USERNAME="qolsysgw" \
+  -e MQTT_PASSWORD="your_mqtt_password" \
+  ghcr.io/donhoffman/qolsysgw-container:latest
+```
 
-To install Qolsys Gateway with HACS, you will need to make sure that you enabled
-AppDaemon automations in HACS, as these are not enabled by default:
-
-1. Click on `Configuration` on the left menu bar in Home Assistant Web UI
-2. Select `Devices & Services`
-3. Select `Integrations`
-4. Find `HACS` and click on `Configure`
-5. In the window that opens, make sure that `Enable AppDaemon apps discovery & tracking`
-   is checked, or check it and click `Submit`
-6. If you just enabled this (or just installed HACS), you might have to wait a few minutes
-   as all repositories are being fetched; you might hit a GitHub rate limit, which might
-   then require you to wait a few hours for HACS to be fully configured. In this case,
-   you won't be able to proceed to the next steps until HACS is ready.
-
-Now, to install Qolsys Gateway with HACS, follow these steps:
-
-1. Click on `HACS` on the left menu bar in Home Assistant Web UI
-2. Click on `Automations` in the right panel
-3. Click on `Explore & download repositories` in the bottom right corner
-4. Search for `qolsysgw`, and click on `Qolsys Gateway` in the list that appears
-5. In the bottom right corner of the panel that appears, click on
-   `Download this repository with HACS`
-6. A confirmation panel will appear, click on `Download`, and wait for HACS to
-   proceed with the download
-6. Qolsys Gateway is now installed, and HACS will inform you when updates are available
-
-
-#### Manually
-
-Installing Qolsys Gateway manually can be summarized by putting the content of the
-`apps/` directory of this repository (the `qolsysgw/` directory) into the `apps/`
-directory of your AppDaemon installation.
-
-For instance, if your Home Assistant configuration directory is in `/hass/config/`,
-you most likely have AppDaemon setup in `/hass/config/appdaemon/`, and you can thus
-put `qolsysgw/` into `/hass/config/appdaemon/apps/`.
+**Note:** Using `--network host` is recommended as it allows the container to discover your panel and MQTT broker easily. If you prefer bridge networking, ensure the container can reach both your panel and MQTT broker.
 
 
 ## Configuration
 
-### Configuring the MQTT integration in Home Assistant
+Qolsys Gateway is configured using environment variables. You can set these in:
+- A `.env` file (recommended for Docker Compose)
+- `docker-compose.yml` environment section
+- Direct `-e` flags with `docker run`
 
-The MQTT integration of Home Assistant needs to be configured with your
-MQTT broker in order for Qolsys Gateway to work. If you haven't setup the
-MQTT integration yet, you can do so with the following steps:
-
-1. Click on `Configuration` on the left menu bar in Home Assistant Web UI
-2. Select `Devices & Services`
-3. Select `Integrations`
-4. Click on `Add Integration` in the bottom right corner
-5. Search for `MQTT`, and click on the MQTT integration
-6. Fill in the information as configured for your MQTT broker (hostname,
-   port, and username and password if setting things up with an
-   authenticated connection)
-7. Click on `Submit`, Home Assistant will try and connect to the MQTT broker,
-   and the integration will be setup upon success.
+See [`.env.example`](./.env.example) for a complete reference with detailed comments on all options.
 
 
 ### Configuring your Qolsys IQ Panel
@@ -303,449 +243,163 @@ To enable the feature and get your secure token, you will need to:
    </details>
 
 
-### Configuring Qolsys Gateway
+### Required Environment Variables
 
-Qolsys Gateway needs to be configured in the `apps.yaml` file of AppDaemon.
-If your Home Assistant configuration directory is in `/hass/config/`, and
-AppDaemon in `/hass/config/appdaemon/`, you will find this file in
-`/hass/config/appdaemon/apps/apps.yaml` (next to the `qolsysgw/` directory
-we moved here previously).
+| Variable | Description | Example |
+|----------|-------------|---------|
+| `QOLSYS_PANEL_HOST` | IP address or hostname of your Qolsys Panel | `192.168.1.100` |
+| `QOLSYS_PANEL_TOKEN` | Secure token from Control4 interface (see [Panel Configuration](#configuring-your-qolsys-iq-panel)) | `abc123...` |
+| `MQTT_HOST` | MQTT broker hostname or IP address | `mosquitto` or `192.168.1.50` |
 
+### Optional Environment Variables
 
-#### Required configuration
+#### Panel Configuration
 
-The minimum configuration to use Qolsys Gateway is the following:
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `QOLSYS_PANEL_PORT` | Auto-detect | Panel port (usually 12345 or 12346) |
+| `QOLSYS_PANEL_MAC` | Auto-detect | Panel MAC address (format: `AA:BB:CC:DD:EE:FF`) |
+| `QOLSYS_PANEL_USER_CODE` | None | User code for arming/disarming (4 or 6 digits) |
+| `QOLSYS_PANEL_UNIQUE_ID` | `qolsys_panel` | Unique ID for this panel (for multiple panels) |
+| `QOLSYS_PANEL_DEVICE_NAME` | `Qolsys Panel` | Friendly name in Home Assistant |
 
-```yaml
-qolsys_panel:
-  module: gateway
-  class: QolsysGateway
-  panel_host: <qolsys_panel_host_or_ip>
-  panel_token: <qolsys_secure_token>
+#### Arming Configuration
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `QOLSYS_ARM_AWAY_EXIT_DELAY` | Panel default | Exit delay in seconds for arm away (0 = instant) |
+| `QOLSYS_ARM_STAY_EXIT_DELAY` | Panel default | Exit delay in seconds for arm stay (0 = instant) |
+| `QOLSYS_ARM_AWAY_BYPASS` | Panel default | Auto-bypass open sensors when arming away (`true`/`false`) |
+| `QOLSYS_ARM_STAY_BYPASS` | Panel default | Auto-bypass open sensors when arming stay (`true`/`false`) |
+| `QOLSYS_ARM_TYPE_CUSTOM_BYPASS` | `arm_away` | Arm mode for custom bypass (`arm_away` or `arm_stay`) |
+
+#### MQTT Configuration
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `MQTT_PORT` | `1883` | MQTT broker port (1883 for plain, 8883 for TLS) |
+| `MQTT_USERNAME` | None | MQTT authentication username |
+| `MQTT_PASSWORD` | None | MQTT authentication password |
+| `MQTT_QOS` | `1` | MQTT Quality of Service level (0, 1, or 2) |
+| `MQTT_RETAIN` | `true` | Retain MQTT messages (`true`/`false`) |
+
+#### Home Assistant Configuration
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `HA_DISCOVERY_PREFIX` | `homeassistant` | Home Assistant MQTT discovery prefix |
+| `HA_CHECK_USER_CODE` | `true` | Validate codes in HA vs sending to panel (`true`/`false`) |
+| `HA_USER_CODE` | None | Separate code for HA validation (if different from panel code) |
+| `HA_CODE_ARM_REQUIRED` | `false` | Require code to arm (`true`/`false`) |
+| `HA_CODE_DISARM_REQUIRED` | `false` | Require code to disarm (`true`/`false`) |
+| `HA_CODE_TRIGGER_REQUIRED` | `false` | Require code to trigger alarm (`true`/`false`) |
+| `HA_STATUS_TOPIC` | `{prefix}/status` | Topic where HA publishes status |
+| `HA_STATUS_ONLINE_PAYLOAD` | `online` | Payload indicating HA is online |
+
+#### Sensor Configuration
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `QOLSYS_SENSOR_DEFAULT_DEVICE_CLASS` | `safety` | Default device class for unmapped sensors |
+| `QOLSYS_SENSOR_ENABLE_STATIC_BY_DEFAULT` | `false` | Enable static sensors (keypads, sirens) by default |
+
+#### Trigger Configuration
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `QOLSYS_TRIGGER_DEFAULT_COMMAND` | None | Default trigger type: `TRIGGER`, `TRIGGER_FIRE`, `TRIGGER_POLICE`, `TRIGGER_AUXILIARY` |
+
+#### Logging Configuration
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `LOG_LEVEL` | `INFO` | Log verbosity: `DEBUG`, `INFO`, `WARNING`, `ERROR`, `CRITICAL` |
+
+### Example Configuration
+
+**.env file:**
+```bash
+# Required
+QOLSYS_PANEL_HOST=192.168.1.100
+QOLSYS_PANEL_TOKEN=your_token_here
+MQTT_HOST=mosquitto
+
+# Optional - MQTT Authentication
+MQTT_USERNAME=qolsysgw
+MQTT_PASSWORD=secure_password
+
+# Optional - Panel user code (recommended)
+QOLSYS_PANEL_USER_CODE=123456
+
+# Optional - Arming configuration
+QOLSYS_ARM_AWAY_EXIT_DELAY=0  # Instant arm when triggered from automations
+QOLSYS_ARM_STAY_EXIT_DELAY=30
+
+# Optional - Logging
+LOG_LEVEL=DEBUG  # For troubleshooting
 ```
 
-With:
-
-- **qolsys_panel:** the name of the application for AppDaemon. You can run
-  multiple instances of Qolsys Gateway, each with a different Qolsys Panel,
-  if you ever need so. See the configuration options below, specifically
-  `panel_unique_id`, to be able to configure multiple devices.
-- **module**: the main module from which QolsysGateway will be loaded.
-  This parameter is mandatory and **cannot be changed** as it references
-  the `qolsysgw/gateway.py` file.
-- **class**: the name of the class that will be loaded by AppDaemon for
-  that automation. This parameter is mandatory and **cannot be changed** as
-  it references the `QolsysGateway` class in the `qolsysgw/gateway.py` file.
-- **panel_host:** the hostname or IP address of your Qolsys Panel, as
-  connected to your network. That hostname or IP address must, of course, be
-  accessible from the server running AppDaemon.
-- **panel_token:** the secure token we got from enabling Control4 on the
-  Qolsys Panel.
+**docker-compose.yml:**
+```yaml
+services:
+  qolsysgw:
+    image: ghcr.io/donhoffman/qolsysgw-container:latest
+    env_file: .env  # Load from .env file
+    # Or specify directly:
+    # environment:
+    #   QOLSYS_PANEL_HOST: "192.168.1.100"
+    #   QOLSYS_PANEL_TOKEN: "your_token"
+    #   MQTT_HOST: "mosquitto"
+    network_mode: host
+    restart: unless-stopped
+```
 
 
-#### Optional configuration related to the Qolsys Panel itself
+## Troubleshooting
 
-- <details><summary><strong>panel_port:</strong> the port to use to connect to your Qolsys Panel with the
-  Control4 protocol. This is not really configurable on the panel itself,
-  but available as an option if needed (for instance, for NAT needs).
-  Defaults to <code>12345</code>.</summary>
+### Container won't start
+- **Check logs**: `docker compose logs qolsysgw`
+- **Verify required variables**: Ensure `QOLSYS_PANEL_HOST`, `QOLSYS_PANEL_TOKEN`, and `MQTT_HOST` are set
+- **Network connectivity**: Container must reach both panel and MQTT broker
 
-  ```yaml
-  qolsys_panel:
-    # ...
-    panel_port: 4242 # use the port 4242
-    # ...
-  ```
-  </details>
+### Can't connect to panel
+- **Verify token**: Token must match what's shown on panel under Control4 settings
+- **Check network**: Panel must be reachable from container (`ping` test from host)
+- **Port conflicts**: Ensure port 12345/12346 not blocked by firewall
+- **Panel reboot**: If Control4 was just enabled, panel may need reboot
 
-- <details><summary><strong>panel_mac:</strong> the mac address of your Qolsys Panel.
-  This is something you can find from your router, and might allow you to link the
-  device created in Home Assistant by Qolsys Gateway to other entries related to your
-  Panel. Not used by default, and Qolsys Gateway will try to resolve the mac address
-  using ARP - which does not work when using appdaemon in docker, except if using the
-  host network mode -, or ignore it entirely if not possible.</summary>
+### Entities not appearing in Home Assistant
+- **MQTT integration**: Ensure HA's MQTT integration is configured and connected
+- **Discovery prefix**: Verify `HA_DISCOVERY_PREFIX` matches HA's MQTT discovery prefix (default: `homeassistant`)
+- **Check MQTT**: Use MQTT explorer to verify messages are being published
+- **HA restart**: Sometimes HA needs restart to pick up new MQTT discovery messages
 
-  ```yaml
-  qolsys_panel:
-    # ...
-    panel_mac: aa:bb:cc:dd:11:22
-    # ...
-  ```
-  </details>
+### Sensors showing unavailable
+- **Panel connection**: Check if gateway is connected to panel (check logs)
+- **MQTT retain**: If `MQTT_RETAIN=false`, states may not persist across HA restarts
+- **Panel response**: Some sensors only update when triggered
 
-- <details><summary><strong>panel_user_code:</strong> the code to send to your
-  Qolsys Panel to disarm your system (and arm when in secure arm mode). This needs
-  to be a valid user code added to your Qolsys Panel. It is recommended to use a
-  distinct user code if setup, so you have the ability to roll it as needed.
-  If unset (or <code>null</code>), you will not be able to disarm your alarm system
-  without providing a code in Home Assistant.
-  Defaults to <code>null</code>.</summary>
+### Can't arm/disarm from Home Assistant
+- **User code**: If no `QOLSYS_PANEL_USER_CODE` set, you must provide code in HA
+- **Code requirements**: Check `HA_CODE_*_REQUIRED` settings match your preferences
+- **Session token**: Gateway creates session tokens to validate HA commands (check logs for errors)
 
-  ```yaml
-  qolsys_panel:
-    # ...
-    panel_user_code: 1234 # there is a code '1234' allowing me to disarm my Qolsys Panel
-    # ...
-  ```
-  </details>
+### Container keeps restarting
+- **Check logs**: `docker compose logs qolsysgw` for error messages
+- **Invalid config**: Verify all environment variables are correctly formatted
+- **MQTT broker**: Ensure MQTT broker is running and accessible
 
-- <details><summary><strong>arm_away_exit_delay:</strong> the delay to set
-  when arming away through Qolsys Gateway. Setting the value to
-  <code>0</code> will instantly arm the alarm system. Setting to
-  <code>null</code> will let the panel use its default value. Setting
-  to any other positive value will set that delay. This will not change
-  the default behavior of the panel when handled manually, simply what
-  will happen when arming away from Home Assistant through Qolsys Gateway.
-  <em>Note that if "Auto Stay" is enabled (may be the default in some cases),
-  an exit delay is configured, and no door is opened or closed
-  during the delay, the panel will be set to "Arm Stay" instead.</em>
-  Defaults to <code>null</code>.</summary>
+### Enable DEBUG logging
+```bash
+# In .env file
+LOG_LEVEL=DEBUG
+```
 
-  ```yaml
-  qolsys_panel:
-    # ...
-    arm_away_exit_delay: 0 # arming instantly when triggered from Home Assistant, since related to automations
-    # ...
-  ```
-  </details>
-
-- <details><summary><strong>arm_stay_exit_delay:</strong> the delay to set
-  when arming stay through Qolsys Gateway. Setting the value to
-  <code>0</code> will instantly arm the alarm system. Setting to
-  <code>null</code> will let the panel use its default value. Setting
-  to any other positive value will set that delay. This will not change
-  the default behavior of the panel when handled manually, simply what
-  will happen when arming stay from Home Assistant through Qolsys Gateway.
-  Defaults to <code>null</code>.</summary>
-
-  ```yaml
-  qolsys_panel:
-    # ...
-    arm_stay_exit_delay: 10 # arming in 10 seconds when triggered from Home Assistant
-    # ...
-  ```
-  </details>
-
-- <details><summary><strong>arm_away_bypass:</strong> whether or not to
-  bypass sensors that are "open" when arming away through Qolsys Gateway.
-  Bypassed sensors are then ignored until the next time the panel will
-  be armed (this means that closing and reopening those sensors after
-  arming with the bypass will not trigger an alarm).
-  Setting the value to <code>true</code> will always bypass open sensors
-  when arming away, while setting it to <code>false</code> will always
-  disable the bypass. If you have a default behavior for this defined in
-  your panel, this parameter will override it. Leaving the parameter
-  unset will leave the panel decide what to do.
-  Defaults to <code>null</code>.</summary>
-
-  ```yaml
-  qolsys_panel:
-    # ...
-    arm_away_bypass: true # will bypass the open sensors if any
-    # ...
-  ```
-  </details>
-
-- <details><summary><strong>arm_stay_bypass:</strong> whether or not to
-  bypass sensors that are "open" when arming stay through Qolsys Gateway.
-  Bypassed sensors are then ignored until the next time the panel will
-  be armed (this means that closing and reopening those sensors after
-  arming with the bypass will not trigger an alarm).
-  Setting the value to <code>true</code> will always bypass open sensors
-  when arming stay, while setting it to <code>false</code> will always
-  disable the bypass. If you have a default behavior for this defined in
-  your panel, this parameter will override it. Leaving the parameter
-  unset will leave the panel decide what to do.
-  Defaults to <code>null</code>.</summary>
-
-  ```yaml
-  qolsys_panel:
-    # ...
-    arm_stay_bypass: false # will NOT bypass the open sensors if any
-    # ...
-  ```
-  </details>
-
-- <details><summary><strong>arm_type_custom_bypass:</strong> the type of
-  arming to use when using <code>ARM_CUSTOM_BYPASS</code> from Home Assistant. This
-  arming type will automatically enable bypassing the open sensors.
-  Setting the value to <code>arm_away</code> will lead to the panel being
-  armed in away mode with bypass enabled when <code>ARM_CUSTOM_BYPASS</code> is used.
-  Setting the value to <code>arm_stay</code> will lead to the panel being
-  armed in stay mode.
-  Defaults to <code>arm_away</code>.</summary>
-
-  ```yaml
-  qolsys_panel:
-    # ...
-    arm_type_custom_bypass: arm_stay # to arm the panel in stay mode when using the custom bypass arming type
-    # ...
-  ```
-  </details>
-
-
-#### Optional configuration related to the representation of the panel in Home Assistant
-
-- <details><summary><strong>panel_unique_id:</strong> the unique ID of the device
-  that will be created for the panel in Home Assistant. All the partitions and
-  sensors unique IDs will be based on that unique ID to, in order to separate cleanly
-  the potential multiple panels you would setup with Qolsys Gateway.
-  Defaults to <code>qolsys_panel</code>.</summary>
-
-  ```yaml
-  qolsys_panel:
-    # ...
-    panel_unique_id: meerkat # there cannot be another device with 'meerkat' as ID, it can help if you want to use Qolsys Gateway for two+ panels
-    # ...
-  ```
-  </details>
-
-- <details><summary><strong>panel_device_name:</strong> the name of the device as it
-  will appear in Home Assistant. Because Qolsys Gateway provides a unique ID for all
-  its elements, you will be able to change the name in the user interface of Home
-  Assistant. Even though, this is the name that Qolsys Gateway will advertise for
-  your panel.
-  Defaults to <code>Qolsys Panel</code>.</summary>
-
-  ```yaml
-  qolsys_panel:
-    # ...
-    panel_device_name: Steve # hey, Steve!
-    # ...
-  ```
-  </details>
-
-- <details><summary><strong>ha_check_user_code:</strong> whether or not
-  the check of the user code should be done in the Home Assistant user
-  interface. If set to <code>false</code>, the code will never be checked
-  in home assistant even if required for arming, disarming or triggering
-  the alarm, and will always be sent to Qolsys Gateway for checking. If
-  set to <code>true</code> and the code is required for one of the actions,
-  if will be checked by the Home Assistant user interface, and never
-  sent through the network to Qolsys Gateway (a session token is shared
-  to Home Assistant by Qolsys Gateway to make sure it is receiving control
-  messages from the right instance). Note that in case of issues of checking
-  a code in Qolsys Gateway, things will simply fail silently.
-  <em>Requires <code>panel_user_code</code> to be set, will silently
-  revert to <code>false</code> otherwise.</em>
-  Defaults to <code>true</code>.</summary>
-
-  ```yaml
-  qolsys_panel:
-    # ...
-    ha_check_user_code: false # we want Qolsys Gateway to receive the code and perform the check
-    # ...
-  ```
-  </details>
-
-- <details><summary><strong>ha_user_code:</strong> if you want to use a
-  different disarm code in Home Assistant than the actual disarm code that
-  Qolsys Gateway will use with the panel, you can define it here. You can
-  use numeric codes (will show a numeric pad in Home Assistant's user
-  interface) or any characters (will show a text box).
-  If <code>ha_check_user_code</code> is set to <code>true</code>, then
-  the verification of that code will be done in Home Assistant directly. If
-  set to <code>false</code>, Qolsys Gateway will use that code to compare
-  against what Home Assistant will send in the control topic.
-  <em>Requires <code>panel_user_code</code> to be set, will raise an
-  error otherwise.</em>
-  Defaults to <code>null</code>.</summary>
-
-  ```yaml
-  qolsys_panel:
-    # ...
-    ha_user_code: $up3r$ecre7!! # this will be the code expected from the user
-    # ...
-  ```
-  </details>
-
-- <details><summary><strong>code_arm_required:</strong> whether or not
-  we require to type-in the code to arm the alarm system.
-  <em>Requires <code>panel_user_code</code> to be set, will raise an
-  error otherwise as the Qolsys Panel does not require any code to arm
-  the alarm system, and Qolsys Gateway cannot do that check without a
-  configured code.</em>
-  Defaults to <code>false</code>.</summary>
-
-  ```yaml
-  qolsys_panel:
-    # ...
-    code_arm_required: true
-    # ...
-  ```
-  </details>
-
-- <details><summary><strong>code_disarm_required:</strong> whether or not
-  we require to type-in the code to arm the alarm system.
-  <em>Will silently be forced to <code>true</code> if
-  <code>panel_user_code</code> is not set, as Qolsys Gateway will not be
-  able to disarm the alarm system without a code.</em>
-  Defaults to <code>false</code>.</summary>
-
-  ```yaml
-  qolsys_panel:
-    # ...
-    code_disarm_required: true
-    # ...
-  ```
-  </details>
-
-- <details><summary><strong>code_trigger_required:</strong> whether or not
-  we require to type-in the code to trigger the alarm system.
-  <em>Requires <code>panel_user_code</code> to be set, will raise an
-  error otherwise as the Qolsys Panel does not require any code to trigger
-  the alarm system, and Qolsys Gateway cannot do that check without a
-  configured code.</em>
-  Defaults to <code>false</code>.</summary>
-
-  ```yaml
-  qolsys_panel:
-    # ...
-    code_trigger_required: true
-    # ...
-  ```
-  </details>
-
-- <details><summary><strong>default_trigger_command:</strong> the trigger
-  command to use among the <a href="./docs/qolsysgw-control-commands.md">valid
-  control commands that Qolsys Gateway support</a>.
-  Defaults to <code>TRIGGER</code>.</summary>
-
-  ```yaml
-  qolsys_panel:
-    # ...
-    default_trigger_command: TRIGGER_FIRE # if we want to trigger the fire alarm by default
-    # ...
-  ```
-  </details>
-
-- <details><summary><strong>default_sensor_device_class:</strong> the sensor
-  device class to use by default if a Qolsys sensor type is not directly
-  mapped to a device class in Qolsys Gateway, but is still part of the
-  identified sensors.
-  Defaults to <code>safety</code>.</summary>
-
-  ```yaml
-  qolsys_panel:
-    # ...
-    default_sensor_device_class: null # if we do not want to get a sensor if the device class is not directly mapped
-    # ...
-  ```
-  </details>
-
-- <details><summary><strong>enable_static_sensors_by_default:</strong>
-  whether or not sensors that will not be updated by the panel (e.g. Bluetooth)
-  should be enabled by default in Home Assistant. Even if setting this to
-  <code>false</code>, you will have the ability to enable them on a
-  sensor-by-sensor basis in Home Assistant. If setting it to <code>true</code>,
-  you will also be able to disable them on a sensor-by-sensor basis in
-  Home Assistant.
-  Defaults to <code>false</code>.</summary>
-
-  ```yaml
-  qolsys_panel:
-    # ...
-    enable_static_sensors_by_default: true
-    # ...
-  ```
-  </details>
-
-
-#### Optional configuration related to MQTT & AppDaemon
-
-- <details><summary><strong>mqtt_namespace:</strong> the MQTT namespace to use to
-  read and send messages in MQTT. This should be the same as configured in
-  <code>appdaemon.yaml</code>, so if you did not use <code>mqtt</code>, you will
-  need to use that option for Qolsys Gateway to work properly.
-  Defaults to <code>mqtt</code>.</summary>
-
-  ```yaml
-  qolsys_panel:
-    # ...
-    mqtt_namespace: mqtt-homeassistant # if we used that namespace in appdaemon.yaml
-    # ...
-  ```
-  </details>
-
-- <details><summary><strong>mqtt_retain:</strong> whether or not we should set
-  the retain flag on availability and states messages of the partitions and sensors.
-  This is interesting as if Home Assistant starts listening to MQTT right after we
-  sent our status messages and we do not use <code>retain</code>, then Home Assistant
-  will not know the state. However, using <code>retain</code> means that we need to
-  handle the cases where AppDaemon is killed, this means that for this option to be
-  considered, we need the <code>birth_topic</code> and <code>will_topic</code> of
-  AppDaemon to be the same, so we can consider AppDaemon's availability as an
-  information of the availability of our partitions and sensors.
-  Defaults to <code>true</code>.</summary>
-
-  ```yaml
-  qolsys_panel:
-    # ...
-    mqtt_retain: false # if we do not want to use MQTT retain
-    # ...
-  ```
-  </details>
-
-- <details><summary><strong>discovery_topic:</strong> The topic base that Home
-  Assistant listens to for MQTT discovery. This needs to be the same as the
-  <code>discovery_prefix</code> configured for the MQTT module in the Home
-  Assistant configuration, which is <code>homeassistant</code> by default.
-  Defaults to <code>homeassistant</code>.</summary>
-
-  ```yaml
-  qolsys_panel:
-    # ...
-    discovery_topic: hass-discovery # if the discovery_prefix was changed to hass-discovery in Home Assistant
-    # ...
-  ```
-  </details>
-
-- <details><summary><strong>control_topic:</strong> the topic to use to
-  receive control commands from Home Assistant. If using <code>{panel_unique_id}</code>
-  as part of the value, it will be converted to the value as defined by
-  the <code>panel_unique_id</code> parameter, allowing to automatically
-  handle multiple instances of Qolsys Gateway for multiple panels, since
-  you will have to define different unique IDs for each.
-  Defaults to <code>{discovery_topic}/alarm_control_panel/{panel_unique_id}/set</code>.</summary>
-
-  ```yaml
-  qolsys_panel:
-    # ...
-    control_topic: panel_{panel_unique_id}/control
-    # ...
-  ```
-  </details>
-
-- <details><summary><strong>event_topic:</strong> the topic to use to
-  write (and also read) the Qolsys Panel events. If using <code>{panel_unique_id}</code>
-  as part of the value, it will be converted to the value as defined by
-  the <code>panel_unique_id</code> parameter, allowing to automatically
-  handle multiple instances of Qolsys Gateway for multiple panels, since
-  you will have to define different unique IDs for each.
-  Defaults to <code>qolsys/{panel_unique_id}/event</code>.</summary>
-
-  ```yaml
-  qolsys_panel:
-    # ...
-    event_topic: panel_{panel_unique_id}/event
-    # ...
-  ```
-  </details>
-
-- <details><summary><strong>user_control_token:</strong> a fixed control
-  token that can be used as an alternative to the session token for control
-  commands sent to Qolsys Gateway, if you want to trigger control commands
-  that are not supported by an Home Assistant service. When set to <code>null</code>,
-  this is simply disabled (only the session token will be considered valid).
-  Defaults to <code>null</code>.</summary>
-
-  ```yaml
-  qolsys_panel:
-    # ...
-    user_control_token: My$ecr3tT0k3n!
-    # ...
-  ```
-  </details>
+Then restart container:
+```bash
+docker compose restart qolsysgw
+docker compose logs -f qolsysgw
+```
 
 
 ## Other documentation
@@ -755,19 +409,29 @@ With:
 - [Qolsys Gateway's entities](./docs/qolsysgw-entities.md)
 
 
-## Acknowledgements and thanks
+## Acknowledgements and Thanks
 
-The initial findings that made this project possible are discussed
-[in the community forum of Home Assistant][hass-community-thread], where the
-Control4 interface was initially mentioned, as well as a number of the events
-and actions that could be used once the connection initiated with the Qolsys
-Panel.
+This project would not exist without the incredible work and contributions of many individuals in the Home Assistant community.
 
-The [<code>ad-qolsys</code>][ad-qolsys] project by [@roopesh][roopesh], which I
-used before deciding to rewrite the automation from scratch with different
-features and a different way to handle events and actions. This project is not
-using a line of code of <code>ad-qolsys</code>, but was initially inspired
-by it.
+### Original qolsysgw Project
+
+Deepest thanks to **[XaF (Raphaël Beamonte)](https://github.com/XaF)** for creating the [original qolsysgw project](https://github.com/XaF/qolsysgw). Their exceptional work on the AppDaemon-based gateway provided the foundation, architecture, and core functionality that made this containerized fork possible. The quality of their code, documentation, and thoughtful design decisions made it a pleasure to build upon.
+
+### Home Assistant Community
+
+Tremendous gratitude to the [Home Assistant Community Forum](https://community.home-assistant.io/) members who pioneered the integration of Qolsys panels with Home Assistant. The [original discussion thread][hass-community-thread] was instrumental in discovering the Control4 interface, documenting the protocol, and sharing countless hours of experimentation and testing. Special thanks to all the community members who contributed their time, panels, and patience to make this integration possible.
+
+### Inspiration and Foundation
+
+Deep appreciation to **[@roopesh](https://github.com/roopesh)** for the [ad-qolsys][ad-qolsys] project, which served as an early inspiration and proof of concept for Qolsys panel integration with Home Assistant. Their pioneering work demonstrated what was possible and inspired others to build upon it.
+
+### The Broader Community
+
+Thank you to the entire Home Assistant ecosystem - the core developers, integration maintainers, and countless contributors who have built such an incredible platform. Special thanks to the MQTT integration maintainers and the AppDaemon team for providing the tools that make projects like this possible.
+
+---
+
+**Note**: This containerized fork represents a different architectural approach to the same goal. All credit for the original concept, protocol implementation, and core functionality belongs to the contributors mentioned above.
 
 
 <!--

@@ -1,0 +1,214 @@
+# Optional YAML Configuration Example for Qolsys Gateway
+#
+# This file demonstrates how to configure Qolsys Gateway using YAML
+# instead of (or in addition to) environment variables.
+#
+# Environment variables take precedence over YAML values.
+#
+# To use this file:
+# 1. Copy it to your desired location (e.g., /config/qolsysgw.yaml)
+# 2. Update the values below
+# 3. Set CONFIG_FILE environment variable to point to this file
+#    Example: CONFIG_FILE=/config/qolsysgw.yaml
+#
+# Note: Most users should use environment variables via .env file.
+# This YAML option is provided for complex configurations or when
+# managing multiple environments.
+
+---
+# =============================================================================
+# REQUIRED: Panel Configuration
+# =============================================================================
+
+panel:
+  # IP address or hostname of your Qolsys Panel (required)
+  host: "192.168.1.100"
+
+  # Secure token from Control4 interface (required)
+  # Get this from: Settings > Advanced > Installation > Devices > Control4
+  token: "your_secure_token_here"
+
+  # Port to connect to (optional, default: auto-detect)
+  # Usually 12345 or 12346
+  # port: 12345
+
+  # Panel MAC address (optional, auto-detected if not set)
+  # Used to link device to Home Assistant network integration
+  # mac: "AA:BB:CC:DD:EE:FF"
+
+  # User code for arming/disarming (optional, but recommended)
+  # Supports both 4-digit and 6-digit codes
+  # user_code: "123456"
+
+  # Unique identifier for this panel (optional, default: qolsys_panel)
+  # Used in MQTT topics and Home Assistant device identifiers
+  # Useful if running multiple panels in the same HA instance
+  # unique_id: "qolsys_panel"
+
+  # Device name for Home Assistant (optional, default: Qolsys Panel)
+  # The friendly name shown in Home Assistant device registry
+  # device_name: "Qolsys Panel"
+
+# =============================================================================
+# REQUIRED: MQTT Broker Configuration
+# =============================================================================
+
+mqtt:
+  # MQTT broker hostname or IP address (required)
+  host: "mosquitto"
+
+  # MQTT broker port (optional, default: 1883)
+  port: 1883
+
+  # MQTT authentication (optional)
+  # username: "qolsysgw"
+  # password: "secure_password"
+
+  # MQTT QoS level (optional, default: 1)
+  # 0 = At most once, 1 = At least once (recommended), 2 = Exactly once
+  # qos: 1
+
+  # Retain MQTT messages (optional, default: true)
+  # If true, messages persist on broker across restarts
+  # retain: true
+
+# =============================================================================
+# OPTIONAL: Arming Configuration
+# =============================================================================
+
+arming:
+  # Exit delay for arm away in seconds (optional)
+  # Override panel's default exit delay when arming away
+  # 0 = instant arm
+  # away_exit_delay: 30
+
+  # Exit delay for arm stay in seconds (optional)
+  # Override panel's default exit delay when arming stay
+  # 0 = instant arm
+  # stay_exit_delay: 0
+
+  # Auto-bypass open sensors when arming away (optional)
+  # If true, bypassed sensors are automatically included
+  # away_bypass: false
+
+  # Auto-bypass open sensors when arming stay (optional)
+  # If true, bypassed sensors are automatically included
+  # stay_bypass: false
+
+  # Arm type for custom bypass (optional, default: arm_away)
+  # Which arm mode to use when custom bypass is requested
+  # Options: arm_away, arm_stay
+  # custom_bypass_type: "arm_away"
+
+# =============================================================================
+# OPTIONAL: Home Assistant Configuration
+# =============================================================================
+
+home_assistant:
+  # MQTT discovery prefix (optional, default: homeassistant)
+  # The prefix for Home Assistant MQTT discovery topics
+  # Change only if you've customized HA's MQTT discovery prefix
+  # discovery_prefix: "homeassistant"
+
+  # Check user code in Home Assistant (optional, default: true)
+  # If true, HA validates user codes locally before sending to panel
+  # If false, codes are sent directly to panel for validation
+  # check_user_code: true
+
+  # User code for Home Assistant (optional)
+  # A different code that HA can validate locally (if different from panel code)
+  # Only used if check_user_code=true
+  # user_code: "654321"
+
+  # Require code for arming (optional, default: false)
+  # code_arm_required: false
+
+  # Require code for disarming (optional, default: false)
+  # Automatically set to true if panel user code is not provided
+  # code_disarm_required: false
+
+  # Require code for triggering alarm (optional, default: false)
+  # code_trigger_required: false
+
+  # Home Assistant status topic (optional)
+  # Topic where Home Assistant publishes its birth message
+  # Gateway subscribes to detect HA restarts and republish configs
+  # status_topic: "homeassistant/status"
+
+  # Home Assistant online payload (optional, default: online)
+  # Payload that indicates Home Assistant is online and ready
+  # status_online_payload: "online"
+
+# =============================================================================
+# OPTIONAL: Sensor Configuration
+# =============================================================================
+
+sensors:
+  # Default device class for unknown sensors (optional, default: safety)
+  # The Home Assistant device class to use when sensor type cannot be mapped
+  # Options: safety, motion, door, window, smoke, gas, moisture, etc.
+  # default_device_class: "safety"
+
+  # Enable static sensors by default (optional, default: false)
+  # If true, sensors that don't send updates (keypads, sirens) are enabled
+  # If false, these sensors are disabled by default (can be manually enabled in HA)
+  # enable_static_by_default: false
+
+# =============================================================================
+# OPTIONAL: Trigger Configuration
+# =============================================================================
+
+triggers:
+  # Default trigger command (optional)
+  # The type of alarm to trigger when alarm is activated from Home Assistant
+  # Options: TRIGGER, TRIGGER_FIRE, TRIGGER_POLICE, TRIGGER_AUXILIARY
+  # Leave unset to require manual trigger type selection in HA
+  # default_command: "TRIGGER"
+
+# =============================================================================
+# OPTIONAL: Logging Configuration
+# =============================================================================
+
+logging:
+  # Log level (optional, default: INFO)
+  # Controls verbosity of application logs
+  # Options: DEBUG, INFO, WARNING, ERROR, CRITICAL
+  level: "INFO"
+
+# =============================================================================
+# Example: Complete Configuration for Production
+# =============================================================================
+
+# panel:
+#   host: "192.168.1.100"
+#   token: "abc123xyz789"
+#   user_code: "123456"
+#   unique_id: "main_panel"
+#   device_name: "Main House Panel"
+#
+# mqtt:
+#   host: "mosquitto"
+#   port: 1883
+#   username: "qolsysgw"
+#   password: "secure_password"
+#   qos: 1
+#   retain: true
+#
+# arming:
+#   away_exit_delay: 0  # Instant arm for automations
+#   stay_exit_delay: 30
+#   away_bypass: false
+#   stay_bypass: false
+#
+# home_assistant:
+#   discovery_prefix: "homeassistant"
+#   check_user_code: true
+#   code_arm_required: false
+#   code_disarm_required: false
+#
+# sensors:
+#   default_device_class: "safety"
+#   enable_static_by_default: false
+#
+# logging:
+#   level: "INFO"
